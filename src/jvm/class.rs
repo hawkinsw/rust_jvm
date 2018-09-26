@@ -11,6 +11,7 @@ use std::fs;
 use std::io::Read;
 use std::str;
 use std::iter;
+use std::fmt;
 
 enum_from_primitive! {
 pub enum ConstantTags {
@@ -54,45 +55,13 @@ pub struct Class{
 }
 
 impl Class {
-	pub fn load(class_with_path: &str) -> Class {
-		let mut bytes: Vec<u8> = Vec::new();
-		let mut c = Class::default();
-		let mut offset : usize = 0;
 
-		if let Ok(mut fd) = fs::File::open(class_with_path) {
-			if let Err(err) = fd.read_to_end(&mut bytes) {
-				print!("oops: could not create a loader: {}\n", err);
-				return c;
-			}
-		} else {
-			return c;
-		}
-
-		c.bytes = bytes;
-
-		c.magic = ((c.bytes[offset + 0] as u32) << 24) |
-			((c.bytes[offset + 1] as u32) << 16) |
-			((c.bytes[offset + 2] as u32) << 8) |
-			((c.bytes[offset + 3] as u32) << 0);
-		offset += 4;
-
-		c.minor_version = ((c.bytes[offset + 0] as u16) << 8) |
-			((c.bytes[offset + 1] as u16) << 0);
-		offset += 2;
-
-		c.major_version = ((c.bytes[offset + 0] as u16) << 8) |
-			((c.bytes[offset + 1] as u16) << 0);
-		offset += 2;
-
-		c.constant_pool_count = ((c.bytes[offset + 0] as u16) << 8) |
-			((c.bytes[offset + 1] as u16) << 0);
-		offset += 2;
-
-		/*
-		 * Build the constant pool.
-		 */
-		c.constant_pool = ConstantPool::new(c.constant_pool_count as usize);
-		for i in 1..c.constant_pool_count as usize {
+	fn load_constant_pool(c: &mut Class,
+	                      constants_count: u16,
+	                      offset: usize) -> usize {
+		let mut offset = offset;
+		c.constant_pool = ConstantPool::new(constants_count as usize);
+		for i in 1 .. constants_count as usize {
 			match ConstantTags::from_u8(c.bytes[offset]) {
 				Some(ConstantTags::CONSTANT_Class) => {
 					let tag:u8 = c.bytes[offset];
@@ -108,16 +77,20 @@ impl Class {
 					let name_and_type_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                               (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i-1, Constant::Fieldref(tag, index, name_and_type_index));
+					c.constant_pool.set(i-1, Constant::Fieldref(tag, 
+					                                            index,
+					                                            name_and_type_index));
 				},
 				Some(ConstantTags::CONSTANT_Methodref) => {
 					let tag:u8 = c.bytes[offset];
 					let index:u16 = (c.bytes[offset+1] as u16) << 8 |
-						c.bytes[offset + 2] as u16;
+					                (c.bytes[offset + 2] as u16);
 					let name_and_type_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                               (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i-1, Constant::Methodref(tag, index, name_and_type_index));
+					c.constant_pool.set(i-1, Constant::Methodref(tag,
+					                                             index,
+					                                             name_and_type_index));
 				},
 				Some(ConstantTags::CONSTANT_InterfaceMethodref) => {
 					print!("InterfaceMethodref\n");
@@ -128,13 +101,12 @@ impl Class {
 					                       (c.bytes[offset + 2] as u16);
 					offset+=3;
 					c.constant_pool.set(i-1, Constant::String(tag, string_index));
-
-									},
+				},
 				Some(ConstantTags::CONSTANT_Integer) => { 
 					print!("Integer\n");
 					let tag:u8 = c.bytes[offset];
-					let bytes:u32 = (c.bytes[offset+1] as u32) << 24 |
-					                (c.bytes[offset + 2] as u32) << 16 |
+					let bytes:u32 = (c.bytes[offset+1] as u32) << 24  |
+					                (c.bytes[offset + 2] as u32) << 16|
 					                (c.bytes[offset + 3] as u32) << 8 |
 					                (c.bytes[offset + 4] as u32) << 0;
 					offset+=5;
@@ -156,15 +128,20 @@ impl Class {
 					let descriptor_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                            (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i-1, Constant::NameAndType(tag, name_index, descriptor_index));
+					c.constant_pool.set(i-1, Constant::NameAndType(tag,
+					                                               name_index,
+					                                               descriptor_index));
 				},
 				Some(ConstantTags::CONSTANT_Utf8) => {
 					let tag:u8 = c.bytes[offset];
 					let length:u16 = (c.bytes[offset+1] as u16) << 8 |
 					                 (c.bytes[offset+2] as u16);
-					let value = str::from_utf8(&c.bytes[offset+3 .. offset+3+length as usize]).unwrap();
-					offset+=1+2+length as usize;
-					c.constant_pool.set(i-1, Constant::Utf8(tag,length,value.to_string()));
+					let value_range = offset+3 .. offset+3+(length as usize);
+					let value = str::from_utf8(&c.bytes[value_range]).unwrap();
+					offset += 1+2+(length as usize);
+					c.constant_pool.set(i-1, Constant::Utf8(tag,
+					                                        length,
+					                                        value.to_string()));
 				},
 				Some(ConstantTags::CONSTANT_MethodHandle) => {
 					print!("MethodHandle\n");
@@ -186,41 +163,49 @@ impl Class {
 				},
 			};
 		}
+		offset
+	}
 
-		c.access_flags = (c.bytes[offset+0] as u16) << 8 |
-		               (c.bytes[offset+1] as u16);
-		offset+=2;
+	fn load_attributes(c: &mut Class, attributes_count: u16, offset: usize)->usize{
+		let mut offset = offset;
 
-		c.this_class = (c.bytes[offset+0] as u16) << 8 |
-		               (c.bytes[offset+1] as u16);
-		offset+=2;
+		c.attributes = Attributes::new(c.attributes_count as usize);
+		for attribute_index in 0 .. c.attributes_count as usize {
+			let attribute_name_index: u16;
+			let attribute_length: u32;
+			let mut attribute: Attribute;
 
-		c.super_class = (c.bytes[offset+0] as u16) << 8 |
-		              (c.bytes[offset+1] as u16);
-		offset+=2;
-
-		c.interfaces_count = (c.bytes[offset+0] as u16) << 8 |
-		                   (c.bytes[offset+1] as u16);
-		offset+=2;
-
-		/*
-		 * Handle the interfaces.
-		 */
-		c.interfaces = iter::repeat(0 as u16).take(c.interfaces_count as usize).collect();
-		for i in 1 .. c.interfaces_count as usize {	
-			c.interfaces[i] = (c.bytes[offset+0] as u16) << 8 |
-			                  (c.bytes[offset+1] as u16);
+			attribute_name_index = (c.bytes[offset+0] as u16) << 8 |
+			                       (c.bytes[offset+1] as u16);
 			offset+=2;
+			attribute_length = (c.bytes[offset+0] as u32) << 24 |
+			                   (c.bytes[offset+1] as u32) << 16 |
+			                   (c.bytes[offset+2] as u32) << 8  |
+			                   (c.bytes[offset+3] as u32);
+			offset+=4;
+			attribute = Attribute::new(attribute_length as usize);
+			attribute.attribute_name_index = attribute_name_index;
+			attribute.attribute_length = attribute_length;
+			/*
+			 * Parse the attributes
+			 */
+			for info in 0 .. attribute_length {
+				attribute.info[info as usize] = c.bytes[offset];
+				offset+=1;
+			}
+			/*
+			 * Assign the completed method attribute
+			 */
+			c.attributes.set(attribute_index as usize, attribute);
 		}
+		offset
+	}
 
-		c.fields_count = (c.bytes[offset+0] as u16) << 8 |
-		                    (c.bytes[offset+1] as u16);
-		offset+=2;
-		/*
-		 * Now parse the fields.
-		 */
-		c.fields = Fields::new(c.fields_count as usize);
-		for field_index in 0 .. c.fields_count as usize {
+	fn load_fields(c: &mut Class, fields_count: u16, offset: usize)->usize {
+		let mut offset = offset;
+
+		c.fields = Fields::new(fields_count as usize);
+		for field_index in 0 .. fields_count as usize {
 			let access_flags: u16;
 			let name_index: u16;
 			let descriptor_index: u16;
@@ -253,12 +238,12 @@ impl Class {
 				let mut attribute: Attribute;
 
 				attribute_name_index = (c.bytes[offset+0] as u16) << 8 |
-			                         (c.bytes[offset+1] as u16);
+				                       (c.bytes[offset+1] as u16);
 				offset+=2;
 				attribute_length = (c.bytes[offset+0] as u32) << 24 |
-			                     (c.bytes[offset+1] as u32) << 16 |
-			                     (c.bytes[offset+2] as u32) << 8  |
-			                     (c.bytes[offset+3] as u32);
+				                   (c.bytes[offset+1] as u32) << 16 |
+				                   (c.bytes[offset+2] as u32) << 8  |
+				                   (c.bytes[offset+3] as u32);
 				offset+=4;
 				attribute = Attribute::new(attribute_length as usize);
 				attribute.attribute_name_index = attribute_name_index;
@@ -277,16 +262,16 @@ impl Class {
 			}
 			c.fields.set(field_index, f);
 		}
+		offset
+	}
 
-		c.methods_count = (c.bytes[offset] as u16) << 8 |
-		                  (c.bytes[offset+1] as u16) << 0;
-		offset+=2;
-
+	fn load_methods(c: &mut Class, methods_count: u16, offset: usize)->usize{
+		let mut offset = offset;
 		/*
 		 * Handle the methods.
 		 */
-		c.methods = Methods::new(c.methods_count as usize);
-		for method_index in 0 .. c.methods_count as usize {
+		c.methods = Methods::new(methods_count as usize);
+		for method_index in 0 .. methods_count as usize {
 			let access_flags: u16;
 			let name_index: u16;
 			let descriptor_index: u16;
@@ -295,16 +280,16 @@ impl Class {
 			let mut m: Method;
 
 			access_flags = (c.bytes[offset] as u16) << 8 |
-		                 (c.bytes[offset+1] as u16) << 0;
+			               (c.bytes[offset+1] as u16) << 0;
 			offset+=2;
 			name_index = (c.bytes[offset] as u16) << 8 |
-		               (c.bytes[offset+1] as u16) << 0;
+			             (c.bytes[offset+1] as u16) << 0;
 			offset+=2;
 			descriptor_index = (c.bytes[offset] as u16) << 8 |
-		                     (c.bytes[offset+1] as u16) << 0;
+			                   (c.bytes[offset+1] as u16) << 0;
 			offset+=2;
 			attributes_count = (c.bytes[offset] as u16) << 8 |
-		                     (c.bytes[offset+1] as u16) << 0;
+			                   (c.bytes[offset+1] as u16) << 0;
 			offset+=2;
 
 			m = Method::new(attributes_count as usize);
@@ -319,12 +304,12 @@ impl Class {
 				let mut attribute: Attribute;
 
 				attribute_name_index = (c.bytes[offset+0] as u16) << 8 |
-			                         (c.bytes[offset+1] as u16);
+				                       (c.bytes[offset+1] as u16);
 				offset+=2;
 				attribute_length = (c.bytes[offset+0] as u32) << 24 |
-			                     (c.bytes[offset+1] as u32) << 16 |
-			                     (c.bytes[offset+2] as u32) << 8  |
-			                     (c.bytes[offset+3] as u32);
+				                   (c.bytes[offset+1] as u32) << 16 |
+				                   (c.bytes[offset+2] as u32) << 8  |
+ 				                   (c.bytes[offset+3] as u32);
 				offset+=4;
 				attribute = Attribute::new(attribute_length as usize);
 				attribute.attribute_name_index = attribute_name_index;
@@ -343,67 +328,132 @@ impl Class {
 			}
 			c.methods.set(method_index, m);
 		}
+		offset
+	}
 
-		c.attributes_count = (c.bytes[offset] as u16) << 8 |
-		                     (c.bytes[offset+1] as u16) << 0;
+	pub fn load(class_with_path: &str) -> Class {
+		let mut bytes: Vec<u8> = Vec::new();
+		let mut c = Class::default();
+		let mut offset : usize = 0;
+
+		if let Ok(mut fd) = fs::File::open(class_with_path) {
+			if let Err(err) = fd.read_to_end(&mut bytes) {
+				print!("oops: could not create a loader: {}\n", err);
+				return c;
+			}
+		} else {
+			return c;
+		}
+
+		c.bytes = bytes;
+
+		c.magic = (c.bytes[offset + 0] as u32) << 24 |
+		          (c.bytes[offset + 1] as u32) << 16 |
+		          (c.bytes[offset + 2] as u32) << 8  |
+		          (c.bytes[offset + 3] as u32) << 0;
+		offset += 4;
+
+		c.minor_version = (c.bytes[offset + 0] as u16) << 8 |
+		                  (c.bytes[offset + 1] as u16) << 0;
+		offset += 2;
+
+		c.major_version = (c.bytes[offset + 0] as u16) << 8 |
+		                  (c.bytes[offset + 1] as u16) << 0;
+		offset += 2;
+
+		/*
+		 * Load the constants pool.
+		 */
+		let constants_pool_count: u16 = (c.bytes[offset + 0] as u16) << 8 |
+		                                (c.bytes[offset + 1] as u16) << 0;
+		c.constant_pool_count = constants_pool_count.clone();
+		offset += 2;
+		offset = Class::load_constant_pool(&mut c, constants_pool_count, offset);
+
+		c.access_flags = (c.bytes[offset+0] as u16) << 8 |
+		                 (c.bytes[offset+1] as u16);
+		offset+=2;
+
+		c.this_class = (c.bytes[offset+0] as u16) << 8 |
+		               (c.bytes[offset+1] as u16);
+		offset+=2;
+
+		c.super_class = (c.bytes[offset+0] as u16) << 8 |
+		                (c.bytes[offset+1] as u16);
+		offset+=2;
+
+		c.interfaces_count = (c.bytes[offset+0] as u16) << 8 |
+		                     (c.bytes[offset+1] as u16);
 		offset+=2;
 
 		/*
-		 * Handle the attributes.
+		 * Handle the interfaces.
 		 */
-		c.attributes = Attributes::new(c.attributes_count as usize);
-		for attribute_index in 0 .. c.attributes_count as usize {
-			let attribute_name_index: u16;
-			let attribute_length: u32;
-			let mut attribute: Attribute;
-
-			attribute_name_index = (c.bytes[offset+0] as u16) << 8 |
-			                         (c.bytes[offset+1] as u16);
+		c.interfaces = iter::repeat(0 as u16)
+		                    .take(c.interfaces_count as usize)
+		                    .collect();
+		for i in 1 .. c.interfaces_count as usize {	
+			c.interfaces[i] = (c.bytes[offset+0] as u16) << 8 |
+			                  (c.bytes[offset+1] as u16);
 			offset+=2;
-			attribute_length = (c.bytes[offset+0] as u32) << 24 |
-		                     (c.bytes[offset+1] as u32) << 16 |
-		                     (c.bytes[offset+2] as u32) << 8  |
-		                     (c.bytes[offset+3] as u32);
-			offset+=4;
-			attribute = Attribute::new(attribute_length as usize);
-			attribute.attribute_name_index = attribute_name_index;
-			attribute.attribute_length = attribute_length;
-			/*
-			 * Parse the attributes
-			 */
-			for info in 0 .. attribute_length {
-				attribute.info[info as usize] = c.bytes[offset];
-				offset+=1;
-			}
-			/*
-			 * Assign the completed method attribute
-			 */
-			c.attributes.set(attribute_index as usize, attribute);
 		}
+
+		/*
+		 * Now parse the fields.
+		 */
+
+		let fields_count: u16 = (c.bytes[offset+0] as u16) << 8 |
+		                        (c.bytes[offset+1] as u16);
+		c.fields_count = fields_count.clone();
+
+		offset+=2;
+		offset = Class::load_fields(&mut c, fields_count, offset);
+
+		/*
+		 * Now parse the methods.
+		 */
+		let methods_count = (c.bytes[offset] as u16) << 8 |
+		                    (c.bytes[offset+1] as u16) << 0;
+		c.methods_count = methods_count.clone();
+		offset+=2;
+
+		offset = Class::load_methods(&mut c, methods_count, offset);
+
+		/*
+		 * Now parse the attributes.
+		 */
+		let attributes_count: u16 = (c.bytes[offset] as u16) << 8 |
+		                            (c.bytes[offset+1] as u16) << 0;
+		c.attributes_count = attributes_count.clone();
+		offset+=2;
+
+		offset = Class::load_attributes(&mut c, attributes_count, offset);
 		c	
 	}
+}
 
-	pub fn print(&self) {
-		print!("size: {}\n", self.bytes.len());
-		print!("magic: {}\n", self.magic);
-		print!("minor_version: {}\n", self.minor_version);
-		print!("major_version: {}\n", self.major_version);
-		print!("constant_pool_count: {}\n", self.constant_pool_count);
+impl fmt::Display for Class {
+	fn fmt(&self, f: &mut fmt::Formatter) ->fmt::Result {
+		write!(f,"size: {}\n", self.bytes.len());
+		write!(f,"magic: {}\n", self.magic);
+		write!(f,"minor_version: {}\n", self.minor_version);
+		write!(f,"major_version: {}\n", self.major_version);
+		write!(f,"constant_pool_count: {}\n", self.constant_pool_count);
 		for i in 1 .. self.constant_pool_count {
-			print!("#{}: {}\n", i, self.constant_pool.get(i as usize - 1));
+			write!(f,"#{}: {}\n", i, self.constant_pool.get(i as usize - 1));
 		}
-		print!("access_flags: {}\n", self.access_flags);
-		print!("this_class: {}\n", self.this_class);
-		print!("super_class: {}\n", self.super_class);
-		print!("interfaces_count: {}\n", self.interfaces_count);
+		write!(f,"access_flags: {}\n", self.access_flags);
+		write!(f,"this_class: {}\n", self.this_class);
+		write!(f,"super_class: {}\n", self.super_class);
+		write!(f,"interfaces_count: {}\n", self.interfaces_count);
 		for i in 1 .. self.interfaces_count  {
-			print!("#{}: {}\n", i, self.interfaces[i as usize - 1]);
+			write!(f,"#{}: {}\n", i, self.interfaces[i as usize - 1]);
 		}
-		print!("fields_count: {}\n", self.fields_count);
-		print!("fields: {}\n", self.fields);
-		print!("methods_count: {}\n", self.methods_count);
-		print!("methods: {}\n", self.methods);
-		print!("attributes_count: {}\n", self.attributes_count);
-		print!("attributes: {}\n", self.attributes);
+		write!(f,"fields_count: {}\n", self.fields_count);
+		write!(f,"fields: {}\n", self.fields);
+		write!(f,"methods_count: {}\n", self.methods_count);
+		write!(f,"methods: {}\n", self.methods);
+		write!(f,"attributes_count: {}\n", self.attributes_count);
+		write!(f,"attributes: {}\n", self.attributes)
 	}
 }
