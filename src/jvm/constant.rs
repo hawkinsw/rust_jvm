@@ -7,7 +7,7 @@ pub enum Constant {
 	Methodref(u8, u16, u16),
 	InterfaceMethodref(),
 	String(u8, u16),
-	Integer(),
+	Integer(u8, u32),
 	Float(),
 	Long(),
 	Double(),
@@ -57,7 +57,12 @@ impl fmt::Display for Constant {
 						tag,
 						length,
 						value)
-			}
+			},
+			Constant::Integer(tag, value) => {
+				write!(f, "Integer: tag: {}, value: {}",
+					tag,
+					value)
+			},
 			_ => write!(f, "Unknown")
 		}
 	}

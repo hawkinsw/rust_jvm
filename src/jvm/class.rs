@@ -1,9 +1,16 @@
 use enum_primitive::FromPrimitive;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
+use jvm::field::Fields;
+use jvm::field::Field;
+use jvm::attribute::Attribute;
+use jvm::attribute::Attributes;
+use jvm::method::Methods;
+use jvm::method::Method;
 use std::fs;
 use std::io::Read;
 use std::str;
+use std::iter;
 
 enum_from_primitive! {
 pub enum ConstantTags {
@@ -37,6 +44,13 @@ pub struct Class{
 	this_class: u16,
 	super_class: u16,
 	interfaces_count: u16,
+	interfaces: Vec<u16>,
+	fields_count: u16,
+	fields: Fields,
+	methods_count: u16,
+	methods: Methods,
+	attributes_count: u16,
+	attributes: Attributes,
 }
 
 impl Class {
@@ -78,14 +92,14 @@ impl Class {
 		 * Build the constant pool.
 		 */
 		c.constant_pool = ConstantPool::new(c.constant_pool_count as usize);
-		for i in 0..c.constant_pool_count as usize -1 {
+		for i in 1..c.constant_pool_count as usize {
 			match ConstantTags::from_u8(c.bytes[offset]) {
 				Some(ConstantTags::CONSTANT_Class) => {
 					let tag:u8 = c.bytes[offset];
 					let name_index:u16 = (c.bytes[offset+1] as u16) << 8 |
 					                     (c.bytes[offset + 2] as u16);
 					offset+=3;
-					c.constant_pool.set(i, Constant::Class(tag, name_index));
+					c.constant_pool.set(i-1, Constant::Class(tag, name_index));
 				},
 				Some(ConstantTags::CONSTANT_Fieldref) => {
 					let tag:u8 = c.bytes[offset];
@@ -94,7 +108,7 @@ impl Class {
 					let name_and_type_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                               (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i, Constant::Fieldref(tag, index, name_and_type_index));
+					c.constant_pool.set(i-1, Constant::Fieldref(tag, index, name_and_type_index));
 				},
 				Some(ConstantTags::CONSTANT_Methodref) => {
 					let tag:u8 = c.bytes[offset];
@@ -103,7 +117,7 @@ impl Class {
 					let name_and_type_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                               (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i, Constant::Methodref(tag, index, name_and_type_index));
+					c.constant_pool.set(i-1, Constant::Methodref(tag, index, name_and_type_index));
 				},
 				Some(ConstantTags::CONSTANT_InterfaceMethodref) => {
 					print!("InterfaceMethodref\n");
@@ -113,11 +127,18 @@ impl Class {
 					let string_index:u16 = (c.bytes[offset+1] as u16) << 8 |
 					                       (c.bytes[offset + 2] as u16);
 					offset+=3;
-					c.constant_pool.set(i, Constant::String(tag, string_index));
+					c.constant_pool.set(i-1, Constant::String(tag, string_index));
 
 									},
 				Some(ConstantTags::CONSTANT_Integer) => { 
 					print!("Integer\n");
+					let tag:u8 = c.bytes[offset];
+					let bytes:u32 = (c.bytes[offset+1] as u32) << 24 |
+					                (c.bytes[offset + 2] as u32) << 16 |
+					                (c.bytes[offset + 3] as u32) << 8 |
+					                (c.bytes[offset + 4] as u32) << 0;
+					offset+=5;
+					c.constant_pool.set(i-1, Constant::Integer(tag, bytes));
 				},
 				Some(ConstantTags::CONSTANT_Float) => {
 					print!("Float\n");
@@ -135,7 +156,7 @@ impl Class {
 					let descriptor_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                            (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i, Constant::NameAndType(tag, name_index, descriptor_index));
+					c.constant_pool.set(i-1, Constant::NameAndType(tag, name_index, descriptor_index));
 				},
 				Some(ConstantTags::CONSTANT_Utf8) => {
 					let tag:u8 = c.bytes[offset];
@@ -143,7 +164,7 @@ impl Class {
 					                 (c.bytes[offset+2] as u16);
 					let value = str::from_utf8(&c.bytes[offset+3 .. offset+3+length as usize]).unwrap();
 					offset+=1+2+length as usize;
-					c.constant_pool.set(i, Constant::Utf8(tag,length,value.to_string()));
+					c.constant_pool.set(i-1, Constant::Utf8(tag,length,value.to_string()));
 				},
 				Some(ConstantTags::CONSTANT_MethodHandle) => {
 					print!("MethodHandle\n");
@@ -182,6 +203,183 @@ impl Class {
 		                   (c.bytes[offset+1] as u16);
 		offset+=2;
 
+		/*
+		 * Handle the interfaces.
+		 */
+		c.interfaces = iter::repeat(0 as u16).take(c.interfaces_count as usize).collect();
+		for i in 1 .. c.interfaces_count as usize {	
+			c.interfaces[i] = (c.bytes[offset+0] as u16) << 8 |
+			                  (c.bytes[offset+1] as u16);
+			offset+=2;
+		}
+
+		c.fields_count = (c.bytes[offset+0] as u16) << 8 |
+		                    (c.bytes[offset+1] as u16);
+		offset+=2;
+		/*
+		 * Now parse the fields.
+		 */
+		c.fields = Fields::new(c.fields_count as usize);
+		for field_index in 0 .. c.fields_count as usize {
+			let access_flags: u16;
+			let name_index: u16;
+			let descriptor_index: u16;
+			let attributes_count: u16;
+			let mut f: Field;
+
+			access_flags = (c.bytes[offset+0] as u16) << 8 |
+			               (c.bytes[offset+1] as u16);
+			offset+=2;
+			name_index = (c.bytes[offset+0] as u16) << 8 |
+			             (c.bytes[offset+1] as u16);
+			offset+=2;
+			descriptor_index = (c.bytes[offset+0] as u16) << 8 |
+			                   (c.bytes[offset+1] as u16);
+			offset+=2;
+			attributes_count = (c.bytes[offset+0] as u16) << 8 |
+			                   (c.bytes[offset+1] as u16);
+			offset+=2;
+
+			f = Field::new(attributes_count as usize);
+			f.access_flags = access_flags;
+			f.descriptor_index = descriptor_index;
+			f.attributes_count = attributes_count;
+			/*
+			 * Now, parse the attributes.
+			 */
+			for attribute_index in 0 .. attributes_count {
+				let attribute_name_index: u16;
+				let attribute_length: u32;
+				let mut attribute: Attribute;
+
+				attribute_name_index = (c.bytes[offset+0] as u16) << 8 |
+			                         (c.bytes[offset+1] as u16);
+				offset+=2;
+				attribute_length = (c.bytes[offset+0] as u32) << 24 |
+			                     (c.bytes[offset+1] as u32) << 16 |
+			                     (c.bytes[offset+2] as u32) << 8  |
+			                     (c.bytes[offset+3] as u32);
+				offset+=4;
+				attribute = Attribute::new(attribute_length as usize);
+				attribute.attribute_name_index = attribute_name_index;
+				attribute.attribute_length = attribute_length;
+				/*
+				 * Parse the attributes
+				 */
+				for info in 0 .. attribute_length {
+					attribute.info[info as usize] = c.bytes[offset];
+					offset+=1;
+				}
+				/*
+				 * Assign the completed field attribute
+				 */
+				f.attributes.set(attribute_index as usize, attribute);
+			}
+			c.fields.set(field_index, f);
+		}
+
+		c.methods_count = (c.bytes[offset] as u16) << 8 |
+		                  (c.bytes[offset+1] as u16) << 0;
+		offset+=2;
+
+		/*
+		 * Handle the methods.
+		 */
+		c.methods = Methods::new(c.methods_count as usize);
+		for method_index in 0 .. c.methods_count as usize {
+			let access_flags: u16;
+			let name_index: u16;
+			let descriptor_index: u16;
+			let attributes_count: u16;
+			let attributes: Attributes;
+			let mut m: Method;
+
+			access_flags = (c.bytes[offset] as u16) << 8 |
+		                 (c.bytes[offset+1] as u16) << 0;
+			offset+=2;
+			name_index = (c.bytes[offset] as u16) << 8 |
+		               (c.bytes[offset+1] as u16) << 0;
+			offset+=2;
+			descriptor_index = (c.bytes[offset] as u16) << 8 |
+		                     (c.bytes[offset+1] as u16) << 0;
+			offset+=2;
+			attributes_count = (c.bytes[offset] as u16) << 8 |
+		                     (c.bytes[offset+1] as u16) << 0;
+			offset+=2;
+
+			m = Method::new(attributes_count as usize);
+			m.access_flags = access_flags;
+			m.name_index = name_index;
+			m.descriptor_index = descriptor_index;
+			m.attributes_count = attributes_count;
+
+			for attribute_index in 0 .. attributes_count {
+				let attribute_name_index: u16;
+				let attribute_length: u32;
+				let mut attribute: Attribute;
+
+				attribute_name_index = (c.bytes[offset+0] as u16) << 8 |
+			                         (c.bytes[offset+1] as u16);
+				offset+=2;
+				attribute_length = (c.bytes[offset+0] as u32) << 24 |
+			                     (c.bytes[offset+1] as u32) << 16 |
+			                     (c.bytes[offset+2] as u32) << 8  |
+			                     (c.bytes[offset+3] as u32);
+				offset+=4;
+				attribute = Attribute::new(attribute_length as usize);
+				attribute.attribute_name_index = attribute_name_index;
+				attribute.attribute_length = attribute_length;
+				/*
+				 * Parse the attributes
+				 */
+				for info in 0 .. attribute_length {
+					attribute.info[info as usize] = c.bytes[offset];
+					offset+=1;
+				}
+				/*
+				 * Assign the completed method attribute
+				 */
+				m.attributes.set(attribute_index as usize, attribute);
+			}
+			c.methods.set(method_index, m);
+		}
+
+		c.attributes_count = (c.bytes[offset] as u16) << 8 |
+		                     (c.bytes[offset+1] as u16) << 0;
+		offset+=2;
+
+		/*
+		 * Handle the attributes.
+		 */
+		c.attributes = Attributes::new(c.attributes_count as usize);
+		for attribute_index in 0 .. c.attributes_count as usize {
+			let attribute_name_index: u16;
+			let attribute_length: u32;
+			let mut attribute: Attribute;
+
+			attribute_name_index = (c.bytes[offset+0] as u16) << 8 |
+			                         (c.bytes[offset+1] as u16);
+			offset+=2;
+			attribute_length = (c.bytes[offset+0] as u32) << 24 |
+		                     (c.bytes[offset+1] as u32) << 16 |
+		                     (c.bytes[offset+2] as u32) << 8  |
+		                     (c.bytes[offset+3] as u32);
+			offset+=4;
+			attribute = Attribute::new(attribute_length as usize);
+			attribute.attribute_name_index = attribute_name_index;
+			attribute.attribute_length = attribute_length;
+			/*
+			 * Parse the attributes
+			 */
+			for info in 0 .. attribute_length {
+				attribute.info[info as usize] = c.bytes[offset];
+				offset+=1;
+			}
+			/*
+			 * Assign the completed method attribute
+			 */
+			c.attributes.set(attribute_index as usize, attribute);
+		}
 		c	
 	}
 
@@ -191,12 +389,21 @@ impl Class {
 		print!("minor_version: {}\n", self.minor_version);
 		print!("major_version: {}\n", self.major_version);
 		print!("constant_pool_count: {}\n", self.constant_pool_count);
-		for i in 0 .. self.constant_pool_count-1 {
-			print!("#{}: {}\n", i+1, self.constant_pool.get(i as usize));
+		for i in 1 .. self.constant_pool_count {
+			print!("#{}: {}\n", i, self.constant_pool.get(i as usize - 1));
 		}
 		print!("access_flags: {}\n", self.access_flags);
 		print!("this_class: {}\n", self.this_class);
 		print!("super_class: {}\n", self.super_class);
 		print!("interfaces_count: {}\n", self.interfaces_count);
+		for i in 1 .. self.interfaces_count  {
+			print!("#{}: {}\n", i, self.interfaces[i as usize - 1]);
+		}
+		print!("fields_count: {}\n", self.fields_count);
+		print!("fields: {}\n", self.fields);
+		print!("methods_count: {}\n", self.methods_count);
+		print!("methods: {}\n", self.methods);
+		print!("attributes_count: {}\n", self.attributes_count);
+		print!("attributes: {}\n", self.attributes);
 	}
 }

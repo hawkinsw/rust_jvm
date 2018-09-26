@@ -2,6 +2,9 @@ use std::fmt;
 pub mod class;
 pub mod constantpool;
 pub mod constant;
+pub mod attribute;
+pub mod field;
+pub mod method;
 
 pub struct Jvm {
 	class_name: String,
