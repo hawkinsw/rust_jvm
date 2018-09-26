@@ -1,5 +1,5 @@
 public class Hello {
-	public final int hello = 0;
+	public final int hello = 75;
 	public int integer() {
 		return 1;
 	}
