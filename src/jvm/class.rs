@@ -73,7 +73,7 @@ impl Class {
 					let name_index:u16 = (c.bytes[offset+1] as u16) << 8 |
 					                     (c.bytes[offset + 2] as u16);
 					offset+=3;
-					c.constant_pool.set(i-1, Constant::Class(tag, name_index));
+					c.constant_pool.set(i, Constant::Class(tag, name_index));
 				},
 				Some(ConstantTags::CONSTANT_Fieldref) => {
 					let tag:u8 = c.bytes[offset];
@@ -82,7 +82,7 @@ impl Class {
 					let name_and_type_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                               (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i-1, Constant::Fieldref(tag, 
+					c.constant_pool.set(i, Constant::Fieldref(tag, 
 					                                            index,
 					                                            name_and_type_index));
 				},
@@ -93,7 +93,7 @@ impl Class {
 					let name_and_type_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                               (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i-1, Constant::Methodref(tag,
+					c.constant_pool.set(i, Constant::Methodref(tag,
 					                                             index,
 					                                             name_and_type_index));
 				},
@@ -105,7 +105,7 @@ impl Class {
 					let string_index:u16 = (c.bytes[offset+1] as u16) << 8 |
 					                       (c.bytes[offset + 2] as u16);
 					offset+=3;
-					c.constant_pool.set(i-1, Constant::String(tag, string_index));
+					c.constant_pool.set(i, Constant::String(tag, string_index));
 				},
 				Some(ConstantTags::CONSTANT_Integer) => { 
 					print!("Integer\n");
@@ -115,7 +115,7 @@ impl Class {
 					                (c.bytes[offset + 3] as u32) << 8 |
 					                (c.bytes[offset + 4] as u32) << 0;
 					offset+=5;
-					c.constant_pool.set(i-1, Constant::Integer(tag, bytes));
+					c.constant_pool.set(i, Constant::Integer(tag, bytes));
 				},
 				Some(ConstantTags::CONSTANT_Float) => {
 					print!("Float\n");
@@ -133,7 +133,7 @@ impl Class {
 					let descriptor_index: u16 = (c.bytes[offset+3] as u16) << 8 |
 					                            (c.bytes[offset+4] as u16);
 					offset+=5;
-					c.constant_pool.set(i-1, Constant::NameAndType(tag,
+					c.constant_pool.set(i, Constant::NameAndType(tag,
 					                                               name_index,
 					                                               descriptor_index));
 				},
@@ -144,7 +144,7 @@ impl Class {
 					let value_range = offset+3 .. offset+3+(length as usize);
 					let value = str::from_utf8(&c.bytes[value_range]).unwrap();
 					offset += 1+2+(length as usize);
-					c.constant_pool.set(i-1, Constant::Utf8(tag,
+					c.constant_pool.set(i, Constant::Utf8(tag,
 					                                        length,
 					                                        value.to_string()));
 				},
@@ -454,7 +454,7 @@ impl fmt::Display for Class {
 		write!(f,"major_version: {}\n", self.major_version);
 		write!(f,"constant_pool_count: {}\n", self.constant_pool_count);
 		for i in 1 .. self.constant_pool_count {
-			write!(f,"#{}: {}\n", i, self.constant_pool.get(i as usize - 1));
+			write!(f,"#{}: {}\n", i, self.constant_pool.get(i as usize));
 		}
 		write!(f,"access_flags: {}\n", self.access_flags);
 		write!(f,"this_class: {}\n", self.this_class);

@@ -8,7 +8,7 @@ pub struct ConstantPool {
 
 impl ConstantPool {
 	pub fn new(constant_count : usize) -> ConstantPool {
-		ConstantPool{constants: repeat(Constant::Default()).take(constant_count).collect()}
+		ConstantPool{constants: repeat(Constant::Default()).take(constant_count+1).collect()}
 	}
 
 	pub fn set(&mut self, index: usize, constant: Constant) {
