@@ -5,17 +5,23 @@ pub mod constant;
 pub mod attribute;
 pub mod field;
 pub mod method;
+pub mod exceptions;
 
 pub struct Jvm {
 	class_name: String,
 	class: class::Class,
+	debug: bool,
 }
 
 impl Jvm {
-	pub fn new(class_with_path: &str) -> Jvm {
-		return Jvm{class_name: class_with_path.to_string(),
-		           class: class::Class::load(&class_with_path)
-		          };
+	pub fn new(class_with_path: &str, debug: bool) -> Option<Jvm> {
+		if let Some(class) = class::Class::load(&class_with_path) {
+			Some(Jvm{class_name: class_with_path.to_string(),
+		           class: class,
+			         debug: debug})
+		} else {
+			None
+		}
 	}
 	pub fn class(&self) -> &class::Class {
 		&self.class

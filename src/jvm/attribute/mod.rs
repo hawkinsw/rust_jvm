@@ -1,6 +1,8 @@
 use std::fmt;
 use std::iter::repeat;
 
+pub mod codeattributes;
+
 #[derive(Default,Clone)]
 pub struct Attribute {
 	pub attribute_name_index: u16,

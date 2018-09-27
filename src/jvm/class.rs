@@ -8,6 +8,7 @@ use jvm::attribute::Attributes;
 use jvm::method::Methods;
 use jvm::method::Method;
 use std::fs;
+use std::fs::File;
 use std::io::Read;
 use std::str;
 use std::iter;
@@ -55,6 +56,10 @@ pub struct Class{
 }
 
 impl Class {
+
+	pub fn get_method(&self, method_name: String) -> Option<&Method> {
+		self.methods.get_by_name(&method_name, &self.constant_pool)
+	}
 
 	fn load_constant_pool(c: &mut Class,
 	                      constants_count: u16,
@@ -331,18 +336,27 @@ impl Class {
 		offset
 	}
 
-	pub fn load(class_with_path: &str) -> Class {
+	pub fn load(class_with_path: &str) -> Option<Class> {
 		let mut bytes: Vec<u8> = Vec::new();
 		let mut c = Class::default();
 		let mut offset : usize = 0;
+		let mut fd: fs::File;
 
-		if let Ok(mut fd) = fs::File::open(class_with_path) {
-			if let Err(err) = fd.read_to_end(&mut bytes) {
-				print!("oops: could not create a loader: {}\n", err);
-				return c;
+		match fs::File::open(class_with_path) {
+			Ok(mut fd) => {
+				if let Err(err) = fd.read_to_end(&mut bytes) {
+					print!("oops: could not read the class file '{}': {}\n",
+					       class_with_path,
+					       err);
+					return None;
+				}
+			},
+			Err(err) => {
+				print!("oops: could not read the class file '{}': {}\n",
+				       class_with_path,
+				       err);
+				return None;
 			}
-		} else {
-			return c;
 		}
 
 		c.bytes = bytes;
@@ -428,7 +442,7 @@ impl Class {
 		offset+=2;
 
 		offset = Class::load_attributes(&mut c, attributes_count, offset);
-		c	
+		Some(c)
 	}
 }
 

@@ -1,6 +1,8 @@
 use std::fmt;
 use std::iter::repeat;
 use jvm::attribute::Attributes;
+use jvm::constantpool::ConstantPool;
+use jvm::constant::Constant;
 
 #[derive(Default,Clone)]
 pub struct Method {
@@ -44,6 +46,21 @@ impl Methods {
 
 	pub fn get(&self, index: usize) -> Method {
 		self.methods[index].clone()
+	}
+
+	pub fn get_by_name(&self, method_name: &String, cp: &ConstantPool) -> Option<&Method> {
+		for i in 0 .. self.methods.len() {
+			match cp.get(self.methods[i].name_index as usize - 1) {
+				Constant::Utf8(_, _, value) => {
+					print!("value: {}\n", value);
+					if value == *method_name {
+						return Some(&self.methods[i])
+					}
+				},
+				_ => () 
+			}
+		}
+		None
 	}
 }
 
