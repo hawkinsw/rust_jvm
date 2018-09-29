@@ -29,17 +29,15 @@ impl From<Vec<u8>> for CodeAttribute {
 
 		offset+=(code_length as usize*1);
 
-		let exceptions_table_count = (bytes[offset+0] as u16) << 8|
-		                             (bytes[offset+1] as u16) << 0;
-		offset+=2;
+		let exceptions=ExceptionTable::from(&bytes[offset..].to_vec());
 
-		let exceptions=ExceptionTable::load(&bytes[offset..].to_vec(), exceptions_table_count as usize);
+		offset+=exceptions.byte_len();
 
 		CodeAttribute{bytes: bytes,
 		              max_stack: max_stack,
 		              max_locals: max_locals,
 		              code_length: code_length,
-		              exceptions_table_count: exceptions_table_count,
+		              exceptions_table_count: exceptions.exceptions_table_count(),
 		              exceptions: exceptions}
 	}
 }
@@ -50,6 +48,7 @@ impl fmt::Display for CodeAttribute {
 		result = write!(f, "max_stack: {}\n", self.max_stack);
 		result = write!(f, "max_locals: {}\n", self.max_locals);
 		result = write!(f, "code_length: {}\n", self.code_length);
+		result = write!(f, "exceptions: {}\n", self.exceptions);
 		result
 	}
 }
