@@ -5,6 +5,7 @@ pub mod codeattributes;
 
 #[derive(Default,Clone)]
 pub struct Attribute {
+	pub byte_len: usize,
 	pub attribute_name_index: u16,
 	pub attribute_length: u32,
 	pub info: Vec<u8>,
@@ -15,6 +16,10 @@ impl Attribute {
 		Attribute{info : repeat(0 as u8).
 		                 take(attribute_count).
 										 collect(), .. Default::default()}
+	}
+
+	pub fn byte_len(&self) -> usize {
+		self.byte_len
 	}
 }
 
@@ -28,6 +33,33 @@ impl fmt::Display for Attribute {
 			result = write!(f, "{:X} ", self.info[i as usize]);
 		}
 		result
+	}
+}
+
+impl<'l> From<&'l Vec<u8>> for Attribute {
+	fn from(bytes: &'l Vec<u8>) -> Self {
+		let mut offset = 0;
+		let attribute_name_index: u16;
+		let attribute_length: u32;
+		let mut info: Vec<u8>;
+
+		attribute_name_index = (bytes[offset+0] as u16) << 8 |
+		                       (bytes[offset+1] as u16);
+		offset+=2;
+		attribute_length = (bytes[offset+0] as u32) << 24 |
+		                   (bytes[offset+1] as u32) << 16 |
+		                   (bytes[offset+2] as u32) << 8  |
+		                   (bytes[offset+3] as u32);
+		offset+=4;
+		info = repeat(0).take(attribute_length as usize).collect();
+		/*
+		 * Parse the attributes
+		 */
+		for ii in 0 .. attribute_length {
+			info[ii as usize] = bytes[offset];
+			offset+=1;
+		}
+		Attribute{byte_len: offset, attribute_name_index, attribute_length, info}
 	}
 }
 
@@ -73,35 +105,12 @@ impl<'l> From<&'l Vec<u8>> for Attributes {
 								 collect();
 
 		for attribute_index in 0 .. attributes_count as usize {
-			let attribute_name_index: u16;
-			let attribute_length: u32;
-			let mut attribute: Attribute;
-
-			attribute_name_index = (bytes[offset+0] as u16) << 8 |
-			                       (bytes[offset+1] as u16);
-			offset+=2;
-			attribute_length = (bytes[offset+0] as u32) << 24 |
-			                   (bytes[offset+1] as u32) << 16 |
-			                   (bytes[offset+2] as u32) << 8  |
-			                   (bytes[offset+3] as u32);
-			offset+=4;
-			attribute = Attribute::new(attribute_length as usize);
-			attribute.attribute_name_index = attribute_name_index;
-			attribute.attribute_length = attribute_length;
-			/*
-			 * Parse the attributes
-			 */
-			for info in 0 .. attribute_length {
-				attribute.info[info as usize] = bytes[offset];
-				offset+=1;
-			}
-			/*
-			 * Assign the completed method attribute
-			 */
-			attributes[attribute_index as usize] = attribute;
+			attributes[attribute_index as usize] =
+				Attribute::from(&bytes[offset..].to_vec());
+			offset+=attributes[attribute_index as usize].byte_len();
 		}
 
-		Attributes{byte_len: offset, attributes: attributes}
+		Attributes{byte_len: offset, attributes}
 	}
 }
 
