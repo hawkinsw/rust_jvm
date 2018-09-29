@@ -130,9 +130,9 @@ impl Class {
 		/*
 		 * Handle the interfaces.
 		 */
-		c.interfaces = iter::repeat(0 as u16)
-		                    .take(c.interfaces_count as usize)
-		                    .collect();
+		c.interfaces = iter::repeat(0 as u16).
+		                    take(c.interfaces_count as usize).
+		                    collect();
 		for i in 1 .. c.interfaces_count as usize {	
 			c.interfaces[i] = (c.bytes[offset+0] as u16) << 8 |
 			                  (c.bytes[offset+1] as u16);

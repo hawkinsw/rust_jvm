@@ -15,7 +15,7 @@ impl Attribute {
 	pub fn new(attribute_count: usize) -> Attribute {
 		Attribute{info : repeat(0 as u8).
 		                 take(attribute_count).
-										 collect(), .. Default::default()}
+		                 collect(), .. Default::default()}
 	}
 
 	pub fn byte_len(&self) -> usize {
@@ -102,7 +102,7 @@ impl<'l> From<&'l Vec<u8>> for Attributes {
 
 		attributes = repeat(Attribute{.. Default::default()}).
 		             take(attributes_count as usize).
-								 collect();
+		             collect();
 
 		for attribute_index in 0 .. attributes_count as usize {
 			attributes[attribute_index as usize] =
