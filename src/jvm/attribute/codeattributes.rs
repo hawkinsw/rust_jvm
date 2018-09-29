@@ -2,10 +2,8 @@ use std::fmt;
 use std::iter::repeat;
 use jvm::exceptions::ExceptionTable;
 
-pub struct CodeAttribute<'l> {
-	bytes: &'l Vec<u8>,
-	attribute_name_index: u16,
-	attribute_length: u32,
+pub struct CodeAttribute {
+	bytes: Vec<u8>,
 	max_stack: u16,
 	max_locals: u16,
 	code_length: u32,
@@ -13,19 +11,10 @@ pub struct CodeAttribute<'l> {
 	exceptions: ExceptionTable,
 }
 
-impl<'l> CodeAttribute<'l> {
-	pub fn load(bytes: &Vec<u8>) -> CodeAttribute {
+impl From<Vec<u8>> for CodeAttribute {
+	fn from(bytes: Vec<u8>) -> Self {
 		let mut offset: usize = 0;
-
-		let attribute_name_index = (bytes[offset+0] as u16) << 8|
-		                           (bytes[offset+1] as u16) << 0;
-		offset+=2;
-		let attribute_length = (bytes[offset+0] as u32) << 24|
-		                       (bytes[offset+1] as u32) << 16|
-		                       (bytes[offset+2] as u32) << 8|
-		                       (bytes[offset+3] as u32) << 0;
-		offset+=4;
-
+		
 		let max_stack = (bytes[offset+0] as u16) << 8|
 		                (bytes[offset+1] as u16) << 0;
 		offset+=2;
@@ -47,8 +36,6 @@ impl<'l> CodeAttribute<'l> {
 		let exceptions=ExceptionTable::load(&bytes[offset..].to_vec(), exceptions_table_count as usize);
 
 		CodeAttribute{bytes: bytes,
-		              attribute_name_index: attribute_name_index,
-		              attribute_length: attribute_length,
 		              max_stack: max_stack,
 		              max_locals: max_locals,
 		              code_length: code_length,
@@ -57,8 +44,12 @@ impl<'l> CodeAttribute<'l> {
 	}
 }
 
-impl<'l> fmt::Display for CodeAttribute<'l> {
+impl fmt::Display for CodeAttribute {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		Ok(())
+		let mut result = Ok(());
+		result = write!(f, "max_stack: {}\n", self.max_stack);
+		result = write!(f, "max_locals: {}\n", self.max_locals);
+		result = write!(f, "code_length: {}\n", self.code_length);
+		result
 	}
 }
