@@ -1,5 +1,6 @@
 use enum_primitive::FromPrimitive;
 use jvm::constant::Constant;
+use jvm::constant::Utf8Reserved;
 use std::iter::repeat;
 use std::str;
 
@@ -124,13 +125,28 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					constants[i] = Constant::NameAndType(tag, name_index, descriptor_index);
 				},
 				Some(ConstantTags::CONSTANT_Utf8) => {
+					let mut reserved: Utf8Reserved = Utf8Reserved::NotReserved;
 					let tag:u8 = bytes[offset];
 					let length:u16 = (bytes[offset+1] as u16) << 8 |
 					                 (bytes[offset+2] as u16);
 					let value_range = offset+3 .. offset+3+(length as usize);
 					let value = str::from_utf8(&bytes[value_range]).unwrap();
+
+					/*
+					 * Handle "Six attributes are critical to correct interpretation
+					 * of the class file by the Java Virtual Machine" and give them
+					 * a special reserved status so that it is easier to check later.
+					 */
+					if value == "Code".to_string() {
+						reserved = Utf8Reserved::Code;
+					} else if value == "StackMapTable".to_string() {
+						reserved = Utf8Reserved::StackMapTable;
+					} else if value == "ConstantValue".to_string() {
+						reserved = Utf8Reserved::ConstantValue;
+					}
+
 					offset += 1+2+(length as usize);
-					constants[i] = Constant::Utf8(tag, length, value.to_string());
+					constants[i] = Constant::Utf8(tag,reserved,length,value.to_string());
 				},
 				Some(ConstantTags::CONSTANT_MethodHandle) => {
 					print!("MethodHandle\n");

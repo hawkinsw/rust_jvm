@@ -1,6 +1,39 @@
 use std::fmt;
 
 #[derive(Clone)]
+pub enum Utf8Reserved {
+	Code,
+	ConstantValue,
+	StackMapTable,
+	BoostrapMethods,
+	NestHost,
+	NestMembers,
+	NotReserved
+}
+
+impl fmt::Display for Utf8Reserved {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			Utf8Reserved::NotReserved => {
+				write!(f, "NotReserved")
+			},
+			Utf8Reserved::Code => {
+				write!(f, "Code")
+			},
+			Utf8Reserved::StackMapTable => {
+				write!(f, "StackMapTable")
+			},
+			Utf8Reserved::ConstantValue => {
+				write!(f, "ConstantValue")
+			},
+			_ => {
+				write!(f, "Unknown")
+			}
+		}
+	}
+}
+
+#[derive(Clone)]
 pub enum Constant {
 	Class(u8, u16),
 	Fieldref(u8, u16, u16),
@@ -12,7 +45,7 @@ pub enum Constant {
 	Long(),
 	Double(),
 	NameAndType(u8, u16, u16),
-	Utf8(u8, u16, String),
+	Utf8(u8, Utf8Reserved, u16, String),
 	MethodHandle(),
 	MethodType(),
 	InvokeDynamic(),
@@ -52,9 +85,10 @@ impl fmt::Display for Constant {
 						name_index,
 						descriptor_index)
 			},
-			Constant::Utf8(tag, length, value) => {
-					write!(f, "Utf8: tag: {}, length: {}, value: {}",
+			Constant::Utf8(tag, reserved, length, value) => {
+					write!(f, "Utf8: tag: {}, reserved: {}, length: {}, value: {}",
 						tag,
+						reserved,
 						length,
 						value)
 			},

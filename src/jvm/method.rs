@@ -3,6 +3,7 @@ use std::iter::repeat;
 use jvm::attribute::Attributes;
 use jvm::constantpool::ConstantPool;
 use jvm::constant::Constant;
+use jvm::constant::Utf8Reserved;
 use jvm::attribute::Attribute;
 use jvm::attribute::codeattributes::CodeAttribute;
 
@@ -20,8 +21,8 @@ impl Method {
 	pub fn get_code_attribute(&self, cp: &ConstantPool) -> Option<CodeAttribute>{
 		for i in 0 .. self.attributes.len() {
 			let attribute = self.attributes.get(i);
-			if let Constant::Utf8(_,_,value) = cp.get(attribute.attribute_name_index as usize) {
-				if "Code".to_string() == value {
+			if let Constant::Utf8(_,reserved,_,value) = cp.get(attribute.attribute_name_index as usize) {
+				if let Utf8Reserved::Code = reserved {
 					return Some(CodeAttribute::from(attribute.info));
 				}
 			}
@@ -103,7 +104,7 @@ impl Methods {
 	pub fn get_by_name(&self, method_name: &String, cp: &ConstantPool) -> Option<&Method> {
 		for i in 0 .. self.methods.len() {
 			match cp.get(self.methods[i].name_index as usize) {
-				Constant::Utf8(_, _, value) => {
+				Constant::Utf8(_, _, _, value) => {
 					print!("value: {}\n", value);
 					if value == *method_name {
 						return Some(&self.methods[i])
