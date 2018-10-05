@@ -56,7 +56,7 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 		offset += 2;
 
 		print!("constants_pool_count: {}\n", constants_pool_count);
-		constants = repeat(Constant::Default()).take(constants_pool_count as usize+1).collect();
+		constants = repeat(Constant::Default()).take(constants_pool_count as usize).collect();
 
 		for i in 1 .. constants_pool_count as usize {
 			match ConstantTags::from_u8(bytes[offset]) {
