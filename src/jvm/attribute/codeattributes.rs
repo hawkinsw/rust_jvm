@@ -3,7 +3,8 @@ use std::iter::repeat;
 use jvm::exceptions::ExceptionTable;
 
 pub struct CodeAttribute {
-	bytes: Vec<u8>,
+	pub bytes: Vec<u8>,
+	pub code_offset: usize,
 	max_stack: u16,
 	max_locals: u16,
 	code_length: u32,
@@ -14,7 +15,7 @@ pub struct CodeAttribute {
 impl From<Vec<u8>> for CodeAttribute {
 	fn from(bytes: Vec<u8>) -> Self {
 		let mut offset: usize = 0;
-		
+		let code_offset: usize;
 		let max_stack = (bytes[offset+0] as u16) << 8|
 		                (bytes[offset+1] as u16) << 0;
 		offset+=2;
@@ -27,6 +28,8 @@ impl From<Vec<u8>> for CodeAttribute {
 		                  (bytes[offset+3] as u32) << 0;
 		offset+=4;
 
+		code_offset = offset;
+
 		offset+=(code_length as usize*1);
 
 		let exceptions=ExceptionTable::from(&bytes[offset..].to_vec());
@@ -37,6 +40,7 @@ impl From<Vec<u8>> for CodeAttribute {
 		              max_stack: max_stack,
 		              max_locals: max_locals,
 		              code_length: code_length,
+									code_offset: code_offset,
 		              exceptions_table_count: exceptions.exceptions_table_count(),
 		              exceptions: exceptions}
 	}

@@ -6,6 +6,8 @@ pub mod attribute;
 pub mod field;
 pub mod method;
 pub mod exceptions;
+pub mod vm;
+pub mod methodarea;
 
 pub struct Jvm {
 	class_name: String,

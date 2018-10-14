@@ -2,6 +2,7 @@
 extern crate clap;
 use clap::{Arg,App, SubCommand};
 mod jvm;
+use jvm::vm::Vm;
 
 fn main() {
 	let mut debug: bool = false;
@@ -23,9 +24,12 @@ fn main() {
 	if debug {
 		print!("Opening {}\n", class_name);
 	}
-	
+
 	if let Some(jvm) = jvm::Jvm::new(&class_name, debug) {
-		print!("{}\n", jvm.class());
-		//print!("{}\n", jvm.class().get_method("main".to_string()).unwrap());
+		if debug {
+			print!("{}\n", jvm.class());
+		}
+		let mut vm = Vm::new(&mut jvm.class());
+		vm.execute_main();
 	}
 }
