@@ -11,7 +11,7 @@ pub mod methodarea;
 
 pub struct Jvm {
 	class_name: String,
-	class: class::Class,
+	main_class: Box<class::Class>,
 	debug: bool,
 }
 
@@ -19,14 +19,14 @@ impl Jvm {
 	pub fn new(class_with_path: &str, debug: bool) -> Option<Jvm> {
 		if let Some(class) = class::Class::load(&class_with_path) {
 			Some(Jvm{class_name: class_with_path.to_string(),
-		           class: class,
+		           main_class: class,
 			         debug: debug})
 		} else {
 			None
 		}
 	}
-	pub fn class(&self) -> &class::Class {
-		&self.class
+	pub fn class(&self) -> &Box<class::Class> {
+		&self.main_class
 	}
 }
 

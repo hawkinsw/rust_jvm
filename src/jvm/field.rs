@@ -57,7 +57,7 @@ impl<'l> From<&'l Vec<u8>> for Field {
 	}
 }
 
-#[derive(Default)]
+#[derive(Clone,Default)]
 pub struct Fields {
 	byte_len: usize,
 	fields: Vec<Field>,
@@ -97,7 +97,6 @@ impl<'l> From<&'l Vec<u8>> for Fields {
 		Fields{byte_len: offset, fields: fields}
 	}
 }
-
 
 impl fmt::Display for Fields {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

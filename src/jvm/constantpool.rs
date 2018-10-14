@@ -24,7 +24,7 @@ pub enum ConstantTags {
 	CONSTANT_Package = 20,
 }}
 
-#[derive(Default)]
+#[derive(Clone,Default)]
 pub struct ConstantPool {
 	byte_len: usize,
 	constants: Vec<Constant>,

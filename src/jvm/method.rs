@@ -78,7 +78,7 @@ impl fmt::Display for Method {
 	}
 }
 
-#[derive(Default)]
+#[derive(Clone,Default)]
 pub struct Methods{
 	byte_len: usize,
 	methods: Vec<Method>,
