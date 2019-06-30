@@ -64,7 +64,7 @@ impl Class {
 		offset + c.methods.byte_len()
 	}
 
-	pub fn load(class_with_path: &str) -> Option<Box<Class>> {
+	pub fn load(class_with_path: &str) -> Option<Class> {
 		let mut bytes: Vec<u8> = Vec::new();
 		let mut c = Class::default();
 		let mut offset : usize = 0;
@@ -151,7 +151,7 @@ impl Class {
 		offset = Class::load_methods(&mut c, offset);
 
 		offset = Class::load_attributes(&mut c, offset);
-		Some(Box::<Class>::new(c))
+		Some(c)
 	}
 
 	pub fn get_constant_pool(&self) -> &ConstantPool {

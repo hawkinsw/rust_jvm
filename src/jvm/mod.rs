@@ -10,28 +10,34 @@ pub mod vm;
 pub mod methodarea;
 
 pub struct Jvm {
-	class_name: String,
-	main_class: Box<class::Class>,
 	debug: bool,
 }
 
 impl Jvm {
-	pub fn new(class_with_path: &str, debug: bool) -> Option<Jvm> {
-		if let Some(class) = class::Class::load(&class_with_path) {
-			Some(Jvm{class_name: class_with_path.to_string(),
-		           main_class: class,
-			         debug: debug})
-		} else {
-			None
-		}
+	pub fn new(debug: bool) -> Option<Jvm> {
+		Some(Jvm{debug: debug})
 	}
-	pub fn class(&self) -> &Box<class::Class> {
-		&self.main_class
+
+	pub fn run(&self, start_class_filename: &String,
+	                  start_class: &String,
+	                  start_function: &String) -> bool {
+		let mut vm = vm::Vm::new();
+		if (vm.load_class(start_class, start_class_filename)) {
+			if (self.debug) {
+				println!("Success executing {}.{}", start_class, start_function);
+			}
+			true
+		} else {
+			if (self.debug) {
+				println!("Success executing {}.{}", start_class, start_function);
+			}
+			false
+		}
 	}
 }
 
 impl fmt::Display for Jvm {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "class: {}\n", self.class_name)
+		write!(f, "debug: {}\n", self.debug)
 	}
 }
