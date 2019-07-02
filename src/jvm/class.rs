@@ -36,7 +36,7 @@ pub struct Class{
 
 impl Class {
 
-	pub fn get_method(&self, method_name: String) -> Option<&Method> {
+	pub fn get_method(&self, method_name: &String) -> Option<&Method> {
 		self.methods.get_by_name(&method_name, &self.constant_pool)
 	}
 

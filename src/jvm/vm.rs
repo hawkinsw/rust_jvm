@@ -1,6 +1,8 @@
 use enum_primitive::FromPrimitive;
 use jvm::methodarea::MethodArea;
+use jvm::method::Method;
 use jvm::class::Class;
+use jvm::stack::Stack;
 use std::collections::HashMap;
 
 enum_from_primitive! {
@@ -12,16 +14,16 @@ enum_from_primitive! {
 
 pub struct Vm {
 	classes: HashMap<String, Class>,
-	pc: usize,
+	debug: bool
 }
 
 impl Vm {
-	pub fn new() -> Self {
+	pub fn new(debug: bool) -> Self {
 		/*
 		let mut methodarea = MethodArea::new();
 		methodarea.add_class(main);
 		*/
-		Vm{classes: HashMap::new(), pc: 0}
+		Vm{classes: HashMap::new(), debug: debug}
 	}
 
 	pub fn load_class(&mut self, name: &str, filename: &str) -> bool {
@@ -34,24 +36,38 @@ impl Vm {
 		}
 	}
 
-	/* TODO: Start here by making it more real than it is now.
-	*/
-/*
-	pub fn execute_method(&mut self, method: &str) -> bool {
-		if let Some(method) = self.main.get_method(method.to_string()) {
-			print!("Found method: {}", method);
-			let mut pc_incr = self.execute_opcode();
-			while pc_incr != 0 {
-				print!("Doing next opcode\n");
-				self.pc += pc_incr;
-				pc_incr = self.execute_opcode();
+	pub fn run(&self, class_name: &String, method_name: &String) -> bool {
+		if let Some(class) = self.classes.get(class_name) {
+			if let Some(method) = class.get_method(method_name) {
+				if self.debug {
+					println!("Found method: {}", method);
+				}
+				/*
+				 * We need some stack.
+				 */
+				let stack = Stack::new();
+				self.execute_method_by_method(method)
+			} else {
+				false
 			}
-			true
-		} else {
+		}
+		else {
 			false
 		}
 	}
-*/
+
+	pub fn execute_method_by_method(&self, method: &Method) -> bool {
+		true
+	/*
+		let mut pc_incr = self.execute_opcode();
+		while pc_incr != 0 {
+			print!("Doing next opcode\n");
+			self.pc += pc_incr;
+			pc_incr = self.execute_opcode();
+		}
+	*/
+	}
+
 /*
 	pub fn execute_opcode(&mut self) -> usize {
 		let mut pc_incr: usize = 0;

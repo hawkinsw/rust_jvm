@@ -8,6 +8,8 @@ pub mod method;
 pub mod exceptions;
 pub mod vm;
 pub mod methodarea;
+pub mod stack;
+pub mod frame;
 
 pub struct Jvm {
 	debug: bool,
@@ -21,18 +23,19 @@ impl Jvm {
 	pub fn run(&self, start_class_filename: &String,
 	                  start_class: &String,
 	                  start_function: &String) -> bool {
-		let mut vm = vm::Vm::new();
-		if (vm.load_class(start_class, start_class_filename)) {
-			if (self.debug) {
-				println!("Success executing {}.{}", start_class, start_function);
+		let mut vm = vm::Vm::new(self.debug);
+		if vm.load_class(start_class, start_class_filename) {
+			if vm.run(start_class, start_function) {
+				if self.debug {
+					println!("Success running {}.{}", start_class, start_function);
+				}
+				return true
 			}
-			true
-		} else {
-			if (self.debug) {
-				println!("Success executing {}.{}", start_class, start_function);
-			}
-			false
 		}
+		if self.debug {
+			println!("Failure running {}.{}", start_class, start_function);
+		}
+		false
 	}
 }
 
