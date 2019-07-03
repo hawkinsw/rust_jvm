@@ -38,6 +38,6 @@ fn main() {
 	}
 
 	if let Some(jvm) = jvm::Jvm::new(debug) {
-		jvm.run(&file_name, &class_name, &method);
+		jvm.run(&file_name, &file_name, &method);
 	}
 }

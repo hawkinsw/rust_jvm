@@ -24,13 +24,11 @@ impl Jvm {
 	                  start_class: &String,
 	                  start_function: &String) -> bool {
 		let mut vm = vm::Vm::new(self.debug);
-		if vm.load_class(start_class, start_class_filename) {
-			if vm.run(start_class, start_function) {
-				if self.debug {
-					println!("Success running {}.{}", start_class, start_function);
-				}
-				return true
+		if vm.run(start_class_filename, start_function) {
+			if self.debug {
+				println!("Success running {}.{}", start_class, start_function);
 			}
+			return true
 		}
 		if self.debug {
 			println!("Failure running {}.{}", start_class, start_function);

@@ -40,6 +40,20 @@ impl Class {
 		self.methods.get_by_name(&method_name, &self.constant_pool)
 	}
 
+	pub fn get_name(&self) -> Option<String> {
+		match self.constant_pool.get(self.this_class as usize) {
+			Constant::Class(_, name_idx) => {
+				match self.constant_pool.get(name_idx as usize) {
+					Constant::Utf8(_, _, _, name) => {
+							return Some(name);
+						},
+					_ => return None
+				}
+			},
+			_ => return None
+		}
+	}
+
 	fn load_constant_pool(c: &mut Class, offset: usize) -> usize {
 		c.constant_pool = ConstantPool::from(&c.bytes[offset..].to_vec());
 		c.constant_pool_count = c.constant_pool.constant_pool_count();

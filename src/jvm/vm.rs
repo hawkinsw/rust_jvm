@@ -13,7 +13,6 @@ enum_from_primitive! {
 }
 
 pub struct Vm {
-	classes: HashMap<String, Class>,
 	debug: bool
 }
 
@@ -23,40 +22,32 @@ impl Vm {
 		let mut methodarea = MethodArea::new();
 		methodarea.add_class(main);
 		*/
-		Vm{classes: HashMap::new(), debug: debug}
+		Vm{debug: debug}
 	}
 
-	pub fn load_class(&mut self, name: &str, filename: &str) -> bool {
-		println!("filename: {}", filename);
-		if let Some(class) = Class::load(&filename) {
-			self.classes.insert(name.to_string(), class);
-			true
-		} else {
-			false
-		}
-	}
+	pub fn run(&self, class_filename: &String, method_name: &String) -> bool {
+		/*
+		 * 1: Get a method area. 
+		 * 2: Get a stack.
+		 * 3. Load the class into the method area.
+		 * 4. Load the method from the class in the method area.
+		 * 5. Go!
+		 */
+		let mut method_area = MethodArea::new();
+		let mut stack = Stack::new();
 
-	pub fn run(&self, class_name: &String, method_name: &String) -> bool {
-		if let Some(class) = self.classes.get(class_name) {
-			if let Some(method) = class.get_method(method_name) {
-				if self.debug {
-					println!("Found method: {}", method);
+		if let Some(class_name) = method_area.load_class_from_file(class_filename) {
+			println!("Loaded: {}\n", class_name);
+			if let Some(class) = method_area.get_class_by_name(&class_name) {
+				if let Some(method) = class.get_method(method_name) {
+					return self.go(&method_area, stack, method)
 				}
-				/*
-				 * We need some stack.
-				 */
-				let stack = Stack::new();
-				self.execute_method_by_method(method)
-			} else {
-				false
 			}
 		}
-		else {
-			false
-		}
+		false
 	}
 
-	pub fn execute_method_by_method(&self, method: &Method) -> bool {
+	pub fn go(&self, mut methodarea: &MethodArea, mut stack: Stack, method: &Method) -> bool {
 		true
 	/*
 		let mut pc_incr = self.execute_opcode();
