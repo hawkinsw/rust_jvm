@@ -6,6 +6,7 @@ use jvm::constant::Constant;
 use jvm::constant::Utf8Reserved;
 use jvm::attribute::Attribute;
 use jvm::attribute::codeattributes::CodeAttribute;
+use jvm::class::Class;
 
 #[derive(Default,Clone)]
 pub struct Method {
@@ -14,7 +15,7 @@ pub struct Method {
 	pub name_index: u16,
 	pub descriptor_index: u16,
 	pub attributes_count: u16,
-	pub attributes: Attributes
+	pub attributes: Attributes,
 }
 
 impl Method {
@@ -63,7 +64,8 @@ impl<'l> From<&'l Vec<u8>> for Method {
 						 descriptor_index,
 						 attributes_count:
 						 attributes.attributes_count(),
-						 attributes}
+						 attributes,
+						 }
 		}
 }
 
@@ -84,13 +86,14 @@ pub struct Methods{
 	methods: Vec<Method>,
 }
 
+
 impl Methods {
 	pub fn set(&mut self, index: usize, method: Method) {
 		self.methods[index] = method;
 	}
 
-	pub fn get(&self, index: usize) -> Method {
-		self.methods[index].clone()
+	pub fn get(&self, index: usize) -> &Method {
+		&self.methods[index]
 	}
 
 	pub fn methods_count(&self) -> u16 {
@@ -105,7 +108,6 @@ impl Methods {
 		for i in 0 .. self.methods.len() {
 			match cp.get(self.methods[i].name_index as usize) {
 				Constant::Utf8(_, _, _, value) => {
-					print!("value: {}\n", value);
 					if value == *method_name {
 						return Some(&self.methods[i])
 					}
@@ -144,5 +146,31 @@ impl fmt::Display for Methods {
 			result = write!(f, "{}\n", self.methods[i as usize]);
 		}
 		result
+	}
+}
+
+
+pub struct MethodIterator<'a> {
+	curr: usize,
+	max: usize,
+	methods: &'a Methods,
+}
+
+impl<'a> MethodIterator<'a> {
+	pub fn new(methods: &'a Methods) -> Self {
+		MethodIterator{curr: 0, max: methods.methods_count() as usize, methods}
+	}
+}
+
+impl<'a> Iterator for MethodIterator<'a> {
+	type Item = &'a Method;
+
+	fn next(&mut self) -> Option<&'a Method> {
+		if self.curr<self.max {
+			self.curr += 1;	
+			Some(self.methods.get(self.curr-1))
+		} else {
+			None
+		}
 	}
 }
