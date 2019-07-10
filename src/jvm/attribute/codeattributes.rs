@@ -53,6 +53,10 @@ impl fmt::Display for CodeAttribute {
 		result = write!(f, "max_locals: {}\n", self.max_locals);
 		result = write!(f, "code_length: {}\n", self.code_length);
 		result = write!(f, "exceptions: {}\n", self.exceptions);
+		result = write!(f, "bytes: ");
+		for byte in &self.bytes {
+			result = write!(f, "{:x} ", byte);
+		}
 		result
 	}
 }
