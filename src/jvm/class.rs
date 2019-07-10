@@ -14,7 +14,7 @@ use std::iter;
 use std::fmt;
 
 #[derive(Clone,Default)]
-pub struct Class{
+pub struct Class {
 	bytes: Vec<u8>,
 	magic: u32,
 	minor_version: u16,
@@ -36,8 +36,16 @@ pub struct Class{
 
 impl Class {
 
+	pub fn get_constant_pool(&self) -> &ConstantPool {
+		&self.constant_pool
+	}
+
 	pub fn get_method(&self, method_name: &String) -> Option<&Method> {
 		self.methods.get_by_name(&method_name, &self.constant_pool)
+	}
+
+	pub fn get_methods(&self) -> &Methods {
+		&self.methods
 	}
 
 	pub fn get_name(&self) -> Option<String> {
@@ -166,10 +174,6 @@ impl Class {
 
 		offset = Class::load_attributes(&mut c, offset);
 		Some(c)
-	}
-
-	pub fn get_constant_pool(&self) -> &ConstantPool {
-		&self.constant_pool
 	}
 }
 
