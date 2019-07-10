@@ -29,8 +29,8 @@ impl fmt::Display for Attribute {
 		result = write!(f, "attribute_name_index: {}, attribute_length: {}, attributes: ", 
 			self.attribute_name_index,
 			self.attribute_length);
-		for i in 0 .. self.attribute_length {
-			result = write!(f, "{:X} ", self.info[i as usize]);
+		for byte in &self.info {
+			result = write!(f, "{:x} ", byte);
 		}
 		result
 	}
