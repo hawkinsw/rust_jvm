@@ -8,8 +8,9 @@ pub mod method;
 pub mod exceptions;
 pub mod vm;
 pub mod methodarea;
-pub mod stack;
 pub mod frame;
+pub mod opcodes;
+pub mod typevalues;
 
 pub struct Jvm {
 	debug: bool,
@@ -21,17 +22,20 @@ impl Jvm {
 	}
 
 	pub fn run(&self, start_class_filename: &String,
-	                  start_class: &String,
-	                  start_function: &String) -> bool {
+	                  start_function: &String,
+	                  args: &[String]) -> bool {
+		/*
+		 * Create a VM and start running!
+		 */
 		let mut vm = vm::Vm::new(self.debug);
-		if vm.run(start_class_filename, start_function) {
+		if vm.run(start_class_filename, start_function, args) {
 			if self.debug {
-				println!("Success running {}.{}", start_class, start_function);
+				println!("Success running {}.{}", start_class_filename, start_function);
 			}
 			return true
 		}
 		if self.debug {
-			println!("Failure running {}.{}", start_class, start_function);
+			println!("Failure running {}.{}", start_class_filename, start_function);
 		}
 		false
 	}
