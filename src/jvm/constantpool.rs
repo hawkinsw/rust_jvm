@@ -1,3 +1,5 @@
+#![allow(non_camel_case_types)]
+
 use enum_primitive::FromPrimitive;
 use jvm::constant::Constant;
 use jvm::constant::Utf8Reserved;

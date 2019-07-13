@@ -1,14 +1,10 @@
-use enum_primitive::FromPrimitive;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
 use jvm::field::Fields;
-use jvm::field::Field;
-use jvm::attribute::Attribute;
 use jvm::attribute::Attributes;
 use jvm::method::Methods;
 use jvm::method::Method;
 use std::fs;
-use std::fs::File;
 use std::io::Read;
 use std::iter;
 use std::fmt;
@@ -90,7 +86,6 @@ impl Class {
 		let mut bytes: Vec<u8> = Vec::new();
 		let mut c = Class::default();
 		let mut offset : usize = 0;
-		let mut fd: fs::File;
 
 		match fs::File::open(class_with_path) {
 			Ok(mut fd) => {
@@ -169,34 +164,33 @@ impl Class {
 		 */
 		offset = Class::load_methods(&mut c, offset);
 
-		offset = Class::load_attributes(&mut c, offset);
+		Class::load_attributes(&mut c, offset);
 		Some(c)
 	}
 }
 
 impl fmt::Display for Class {
 	fn fmt(&self, f: &mut fmt::Formatter) ->fmt::Result {
-		let mut result = write!(f,"size: {}\n", self.bytes.len());
-		result = write!(f,"magic: {}\n", self.magic);
-		result = write!(f,"minor_version: {}\n", self.minor_version);
-		result = write!(f,"major_version: {}\n", self.major_version);
-		result = write!(f,"constant_pool_count: {}\n", self.constant_pool_count);
+		write!(f,"size: {}\n", self.bytes.len());
+		write!(f,"magic: {}\n", self.magic);
+		write!(f,"minor_version: {}\n", self.minor_version);
+		write!(f,"major_version: {}\n", self.major_version);
+		write!(f,"constant_pool_count: {}\n", self.constant_pool_count);
 		for i in 1 .. self.constant_pool_count {
-			result = write!(f,"#{}: {}\n", i, self.constant_pool.get(i as usize));
+			write!(f,"#{}: {}\n", i, self.constant_pool.get(i as usize));
 		}
-		result = write!(f,"access_flags: {}\n", self.access_flags);
-		result = write!(f,"this_class: {}\n", self.this_class);
-		result = write!(f,"super_class: {}\n", self.super_class);
-		result = write!(f,"interfaces_count: {}\n", self.interfaces_count);
+		write!(f,"access_flags: {}\n", self.access_flags);
+		write!(f,"this_class: {}\n", self.this_class);
+		write!(f,"super_class: {}\n", self.super_class);
+		write!(f,"interfaces_count: {}\n", self.interfaces_count);
 		for i in 1 .. self.interfaces_count  {
-			result = write!(f,"#{}: {}\n", i, self.interfaces[i as usize - 1]);
+			write!(f,"#{}: {}\n", i, self.interfaces[i as usize - 1]);
 		}
-		result = write!(f,"fields_count: {}\n", self.fields_count);
-		result = write!(f,"fields: {}\n", self.fields);
-		result = write!(f,"methods_count: {}\n", self.methods_count);
-		result = write!(f,"methods: {}\n", self.methods);
-		result = write!(f,"attributes_count: {}\n", self.attributes_count);
-		result = write!(f,"attributes: {}\n", self.attributes);
-		result
+		write!(f,"fields_count: {}\n", self.fields_count);
+		write!(f,"fields: {}\n", self.fields);
+		write!(f,"methods_count: {}\n", self.methods_count);
+		write!(f,"methods: {}\n", self.methods);
+		write!(f,"attributes_count: {}\n", self.attributes_count);
+		write!(f,"attributes: {}\n", self.attributes)
 	}
 }

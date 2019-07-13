@@ -1,12 +1,6 @@
 use jvm::class::Class;
 use std::rc::Rc;
-use jvm::frame::Frame;
 use std::collections::HashMap;
-use jvm::method::Method;
-use jvm::method::Methods;
-use jvm::method::MethodIterator;
-use jvm::opcodes::OperandCodes;
-use enum_primitive::FromPrimitive;
 
 pub struct MethodArea {
 	pub debug: bool,

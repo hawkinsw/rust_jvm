@@ -4,9 +4,7 @@ use jvm::attribute::Attributes;
 use jvm::constantpool::ConstantPool;
 use jvm::constant::Constant;
 use jvm::constant::Utf8Reserved;
-use jvm::attribute::Attribute;
 use jvm::attribute::codeattributes::CodeAttribute;
-use jvm::class::Class;
 
 #[derive(Default,Clone)]
 pub struct Method {
@@ -22,7 +20,7 @@ impl Method {
 	pub fn get_code_attribute(&self, cp: &ConstantPool) -> Option<CodeAttribute>{
 		for i in 0 .. self.attributes.len() {
 			let attribute = self.attributes.get(i);
-			if let Constant::Utf8(_,reserved,_,value) = cp.get(attribute.attribute_name_index as usize) {
+			if let Constant::Utf8(_,reserved,_,_) = cp.get(attribute.attribute_name_index as usize) {
 				if let Utf8Reserved::Code = reserved {
 					return Some(CodeAttribute::from(attribute.info));
 				}
@@ -42,7 +40,6 @@ impl<'l> From<&'l Vec<u8>> for Method {
 			let access_flags: u16;
 			let name_index: u16;
 			let descriptor_index: u16;
-			let attributes_count: u16;
 			let attributes: Attributes;
 
 			access_flags = (bytes[offset] as u16) << 8 |

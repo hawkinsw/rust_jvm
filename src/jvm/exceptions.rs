@@ -37,7 +37,6 @@ impl<'l> From<&'l Vec<u8>> for Exception {
 
 		catch_type = (bytes[offset] as u16) << 8 |
 		             (bytes[offset+1] as u16) <<0;
-		offset+=2;
 
 		Exception{start_pc, end_pc, handler_pc, catch_type}
 	}
@@ -61,7 +60,7 @@ impl ExceptionTable {
 impl<'l> From<&'l Vec<u8>> for ExceptionTable {
 	fn from(bytes: &'l Vec<u8>) -> Self {
 		let mut offset: usize = 0;
-		let mut exceptions_count: u16 = 0;
+		let exceptions_count: u16;
 		let mut exceptions: Vec<Exception>;
 		exceptions_count = (bytes[offset+0] as u16) << 8 as u16|
 		                   (bytes[offset+1] as u16) << 0 as u16;

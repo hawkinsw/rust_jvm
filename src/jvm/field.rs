@@ -1,7 +1,6 @@
 use std::fmt;
 use std::iter::repeat;
 use jvm::attribute::Attributes;
-use jvm::attribute::Attribute;
 
 #[derive(Default,Clone)]
 pub struct Field {
@@ -36,8 +35,6 @@ impl<'l> From<&'l Vec<u8>> for Field {
 		let access_flags: u16;
 		let name_index: u16;
 		let descriptor_index: u16;
-		let attributes_count: u16;
-		let mut f: Field;
 		let attributes: Attributes;
 
 		access_flags = (bytes[offset+0] as u16) << 8 |

@@ -1,5 +1,4 @@
 use std::fmt;
-use std::iter::repeat;
 use jvm::exceptions::ExceptionTable;
 
 pub struct CodeAttribute {
@@ -30,11 +29,11 @@ impl From<Vec<u8>> for CodeAttribute {
 
 		code_offset = offset;
 
-		offset+=(code_length as usize*1);
+		offset+=(code_length as usize)*1;
 
 		let exceptions=ExceptionTable::from(&bytes[offset..].to_vec());
 
-		offset+=exceptions.byte_len();
+		exceptions.byte_len();
 
 		CodeAttribute{bytes: bytes,
 		              max_stack: max_stack,
@@ -48,11 +47,11 @@ impl From<Vec<u8>> for CodeAttribute {
 
 impl fmt::Display for CodeAttribute {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let mut result = Ok(());
-		result = write!(f, "max_stack: {}\n", self.max_stack);
-		result = write!(f, "max_locals: {}\n", self.max_locals);
-		result = write!(f, "code_length: {}\n", self.code_length);
-		result = write!(f, "exceptions: {}\n", self.exceptions);
+		let mut result: fmt::Result;
+		write!(f, "max_stack: {}\n", self.max_stack);
+		write!(f, "max_locals: {}\n", self.max_locals);
+		write!(f, "code_length: {}\n", self.code_length);
+		write!(f, "exceptions: {}\n", self.exceptions);
 		result = write!(f, "bytes: ");
 		for byte in &self.bytes {
 			result = write!(f, "{:x} ", byte);
