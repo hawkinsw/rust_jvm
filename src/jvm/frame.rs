@@ -1,14 +1,16 @@
 use jvm::typevalues::JvmTypeValue;
+use jvm::constantpool::ConstantPool;
 use std::fmt;
 
 #[derive(Clone,Default)]
 pub struct Frame<'a> {
+	pub constant_pool: Option<&'a ConstantPool>,
 	pub operand_stack: Vec<JvmTypeValue<'a>>,
 }
 
 impl<'a> Frame<'a> {
 	pub fn new() -> Self {
-		Frame{operand_stack: Vec::<JvmTypeValue<'a>>::new()}
+		Frame{operand_stack: Vec::<JvmTypeValue<'a>>::new(), constant_pool: None}
 	}
 }
 

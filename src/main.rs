@@ -2,7 +2,7 @@
 extern crate clap;
 use clap::{Arg,App};
 mod jvm;
-use jvm::vm::Vm;
+use jvm::jvmthread::JvmThread;
 
 fn main() {
 	let mut debug: bool = false;

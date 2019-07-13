@@ -6,7 +6,7 @@ pub mod attribute;
 pub mod field;
 pub mod method;
 pub mod exceptions;
-pub mod vm;
+pub mod jvmthread;
 pub mod methodarea;
 pub mod frame;
 pub mod opcodes;
@@ -27,8 +27,8 @@ impl Jvm {
 		/*
 		 * Create a VM and start running!
 		 */
-		let mut vm = vm::Vm::new(self.debug);
-		if vm.run(start_class_filename, start_function, args) {
+		let mut thread = jvmthread::JvmThread::new(self.debug);
+		if thread.run(start_class_filename, start_function, args) {
 			if self.debug {
 				println!("Success running {}.{}", start_class_filename, start_function);
 			}
