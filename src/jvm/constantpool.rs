@@ -37,8 +37,11 @@ impl ConstantPool {
 		self.constants[index] = constant;
 	}
 
-	pub fn get(&self, index: usize) -> Constant {
+	pub fn get_constant_clone(&self, index: usize) -> Constant {
 		self.constants[index].clone()
+	}
+	pub fn get_constant_ref(&self, index: usize) -> &Constant {
+		&self.constants[index]
 	}
 
 	pub fn byte_len(&self) -> usize {

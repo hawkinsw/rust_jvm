@@ -32,24 +32,24 @@ pub struct Class {
 
 impl Class {
 
-	pub fn get_constant_pool(&self) -> &ConstantPool {
+	pub fn get_constant_pool_ref(&self) -> &ConstantPool {
 		&self.constant_pool
 	}
 
-	pub fn get_method(&self, method_name: &String) -> Option<&Method> {
+	pub fn get_method_ref_by_name(&self, method_name: &String) -> Option<&Method> {
 		self.methods.get_by_name(&method_name, &self.constant_pool)
 	}
 
-	pub fn get_methods(&self) -> &Methods {
+	pub fn get_methods_ref(&self) -> &Methods {
 		&self.methods
 	}
 
-	pub fn get_name(&self) -> Option<String> {
-		match self.constant_pool.get(self.this_class as usize) {
+	pub fn get_class_name(&self) -> Option<String> {
+		match self.constant_pool.get_constant_ref(self.this_class as usize) {
 			Constant::Class(_, name_idx) => {
-				match self.constant_pool.get(name_idx as usize) {
+				match self.constant_pool.get_constant_ref(*name_idx as usize) {
 					Constant::Utf8(_, _, _, name) => {
-							return Some(name);
+							return Some(name.clone());
 						},
 					_ => return None
 				}
@@ -177,7 +177,7 @@ impl fmt::Display for Class {
 		write!(f,"major_version: {}\n", self.major_version);
 		write!(f,"constant_pool_count: {}\n", self.constant_pool_count);
 		for i in 1 .. self.constant_pool_count {
-			write!(f,"#{}: {}\n", i, self.constant_pool.get(i as usize));
+			write!(f,"#{}: {}\n", i, self.constant_pool.get_constant_ref(i as usize));
 		}
 		write!(f,"access_flags: {}\n", self.access_flags);
 		write!(f,"this_class: {}\n", self.this_class);

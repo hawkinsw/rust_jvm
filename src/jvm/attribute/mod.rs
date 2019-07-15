@@ -74,6 +74,10 @@ impl Attributes {
 		self.attributes[index] = attribute;
 	}
 
+	pub fn get_ref(&self, index: usize) -> &Attribute {
+		&self.attributes[index]
+	}
+
 	pub fn get(&self, index: usize) -> Attribute {
 		self.attributes[index].clone()
 	}

@@ -11,18 +11,19 @@ pub struct Method {
 	byte_len: usize,
 	pub access_flags: u16,
 	pub name_index: u16,
+	pub class_index: u16,
 	pub descriptor_index: u16,
 	pub attributes_count: u16,
 	pub attributes: Attributes,
 }
 
 impl Method {
-	pub fn get_code_attribute(&self, cp: &ConstantPool) -> Option<CodeAttribute>{
+	pub fn get_code(&self, cp: &ConstantPool) -> Option<&[u8]> {
 		for i in 0 .. self.attributes.len() {
-			let attribute = self.attributes.get(i);
-			if let Constant::Utf8(_,reserved,_,_) = cp.get(attribute.attribute_name_index as usize) {
+			let attribute = self.attributes.get_ref(i);
+			if let Constant::Utf8(_,reserved,_,_) = cp.get_constant_ref(attribute.attribute_name_index as usize) {
 				if let Utf8Reserved::Code = reserved {
-					return Some(CodeAttribute::from(attribute.info));
+					return Some(&attribute.info[8..]);
 				}
 			}
 		}
@@ -58,6 +59,7 @@ impl<'l> From<&'l Vec<u8>> for Method {
 			Method{byte_len: offset, 
 			       access_flags,
 						 name_index,
+						 class_index: 0,
 						 descriptor_index,
 						 attributes_count:
 						 attributes.attributes_count(),
@@ -103,10 +105,10 @@ impl Methods {
 
 	pub fn get_by_name(&self, method_name: &String, cp: &ConstantPool) -> Option<&Method> {
 		for i in 0 .. self.methods.len() {
-			match cp.get(self.methods[i].name_index as usize) {
+			match cp.get_constant_ref(self.methods[i].name_index as usize) {
 				Constant::Utf8(_, _, _, value) => {
-					if value == *method_name {
-						return Some(&self.methods[i])
+					if *value == *method_name {
+						return Some(&self.methods[i]);
 					}
 				},
 				_ => () 
