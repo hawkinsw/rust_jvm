@@ -52,22 +52,22 @@ impl JvmThread {
 		false
 	}
 
-	fn execute_method(&mut self, method: &Method, frame: Frame) -> bool {
+	fn execute_method(&mut self, method: &Method, mut frame: Frame) -> bool {
 		if let Some(code)=method.get_code(frame.constant_pool.unwrap()) {
 			let mut pc = 0;
-			let mut pc_incr = self.execute_opcode(&code[pc ..], &frame);
+			let mut pc_incr = self.execute_opcode(&code[pc ..], &mut frame);
 			while pc_incr != 0 {
 				if self.debug {
 					print!("Doing next opcode\n");
 				}
 				pc += pc_incr;
-				pc_incr = self.execute_opcode(&code[pc ..], &frame);
+				pc_incr = self.execute_opcode(&code[pc ..], &mut frame);
 			}
 		}
 		return true
 	}
 
-	fn execute_opcode(&mut self, bytes: &[u8], frame: &Frame) -> usize {
+	fn execute_opcode(&mut self, bytes: &[u8], frame: &mut Frame) -> usize {
 		let mut pc_incr: usize;
 		let constant_pool = frame.constant_pool.unwrap();
 		let class = frame.class.unwrap();
@@ -77,16 +77,65 @@ impl JvmThread {
 			print!("code: 0x{:X}\n", opcode);
 		}
 		match OperandCodes::from_u8(opcode) {
+			Some(OperandCodes::OPCODE_iconst_m1) => {
+				if self.debug {
+					println!("iconst_m1");
+				}
+				self.execute_iconst_x(-1, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iconst_0) => {
+				if self.debug {
+					println!("iconst_0");
+				}
+				self.execute_iconst_x(0, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iconst_1) => {
+				if self.debug {
+					println!("iconst_1");
+				}
+				self.execute_iconst_x(1, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iconst_2) => {
+				if self.debug {
+					println!("iconst_2");
+				}
+				self.execute_iconst_x(2, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iconst_3) => {
+				if self.debug {
+					println!("iconst_3");
+				}
+				self.execute_iconst_x(3, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iconst_4) => {
+				if self.debug {
+					println!("iconst_4");
+				}
+				self.execute_iconst_x(4, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iconst_5) => {
+				if self.debug {
+					println!("iconst_5");
+				}
+				self.execute_iconst_x(5, frame);
+				pc_incr = 1;
+			},
 			Some(OperandCodes::OPCODE_invokestatic) => {
 				if self.debug {
-					print!("invokestatic\n");
+					println!("invokestatic");
 				}
 				self.execute_invokestatic(bytes, frame);
 				pc_incr = 3;
 			},
 			Some(OperandCodes::OPCODE_pop) => {
 				if self.debug {
-					print!("pop\n");
+					println!("pop");
 				}
 				pc_incr = 1;
 			},
@@ -97,7 +146,13 @@ impl JvmThread {
 		pc_incr
 	}
 
-	pub fn execute_invokestatic(&mut self, bytes: &[u8], frame: &Frame) {
+	pub fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
+		frame.operand_stack.push(JvmTypeValue::Primitive(
+			JvmPrimitiveTypeValue::new(
+				JvmPrimitiveType::Integer, x)));
+	}
+
+	pub fn execute_invokestatic(&mut self, bytes: &[u8], frame: &mut Frame) {
 		let constant_pool = frame.constant_pool.unwrap();
 		let class = frame.class.unwrap();
 		let method_index = (((bytes[1] as u16)<<8)|(bytes[2] as u16)) as usize;

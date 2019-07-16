@@ -16,11 +16,11 @@ pub enum JvmReferenceType<'a> {
 #[derive(Clone)]
 pub struct JvmPrimitiveTypeValue {
 	tipe: JvmPrimitiveType,
-	value: u64,
+	value: i64,
 }
 
 impl JvmPrimitiveTypeValue {
-	pub fn new(tipe: JvmPrimitiveType, value: u64) -> Self {
+	pub fn new(tipe: JvmPrimitiveType, value: i64) -> Self {
 		Self{tipe: tipe, value: value}
 	}
 }
