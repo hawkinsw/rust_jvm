@@ -15,6 +15,11 @@ pub struct JvmThread {
 	pc: usize,
 }
 
+enum OpcodeResult {
+	Incr(usize),
+	Value(JvmTypeValue),
+}
+
 impl JvmThread {
 	pub fn new(debug: bool) -> Self {
 		JvmThread{debug: debug, methodarea: MethodArea::new(debug), pc: 0}
@@ -45,29 +50,34 @@ impl JvmThread {
 					println!("Frame: {}", frame);
 				}
 
-				return self.execute_method(method, frame);
+				self.execute_method(method, frame);
+				return true
 			}
 		}
 		false
 	}
 
-	fn execute_method(&mut self, method: &Method, mut frame: Frame) -> bool {
+	fn execute_method(&mut self, method: &Method, mut frame: Frame) -> Option<JvmTypeValue> {
 		let class = frame.class().unwrap();
 		if let Some(code)=method.get_code(class.get_constant_pool_ref()) {
 			let mut pc = 0;
-			let mut pc_incr = self.execute_opcode(&code[pc ..], &mut frame);
-			while pc_incr != 0 {
+			while {
+				let mut pc_incr = 0;
 				if self.debug {
 					print!("Doing next opcode\n");
 				}
+				match self.execute_opcode(&code[pc ..], &mut frame) {
+					OpcodeResult::Incr(incr) => pc_incr = incr,
+					OpcodeResult::Value(v) => return Some(v)
+				};
 				pc += pc_incr;
-				pc_incr = self.execute_opcode(&code[pc ..], &mut frame);
-			}
+				pc_incr != 0
+			} {}
 		}
-		return true
+		None
 	}
 
-	fn execute_opcode(&mut self, bytes: &[u8], frame: &mut Frame) -> usize {
+	fn execute_opcode(&mut self, bytes: &[u8], frame: &mut Frame) -> OpcodeResult {
 		let mut pc_incr: usize;
 		let class = frame.class().unwrap();
 		let constant_pool = class.get_constant_pool_ref();
@@ -143,7 +153,7 @@ impl JvmThread {
 				pc_incr = 0;
 			}
 		}
-		pc_incr
+		OpcodeResult::Incr(pc_incr)
 	}
 
 	pub fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
