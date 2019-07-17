@@ -50,9 +50,19 @@ impl fmt::Display for JvmPrimitiveTypeValue {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let type_name = match self.tipe {
 			JvmPrimitiveType::Boolean => "Boolean",
-			JvmPrimitiveType::Integer => "Boolean",
+			JvmPrimitiveType::Integer => "Integer",
 		};
 		write!(f, "{}: {}", type_name, self.value)
+	}
+}
+
+impl fmt::Display for JvmTypeValue {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			JvmTypeValue::Primitive(p) => return write!(f, "{}", p),
+			_ => ()
+		};
+		return write!(f, "Can't print references yet.");
 	}
 }
 

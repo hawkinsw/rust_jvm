@@ -27,13 +27,11 @@ impl Frame {
 impl fmt::Display for Frame {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let mut result: fmt::Result;
-		result = write!(f,"");
+		result = write!(f,"Operand stack:\n");
 		for entry in &self.operand_stack {
-			match entry {
-				JvmTypeValue::Primitive(primitive) => result = write!(f, "Primitive: {}", primitive),
-				JvmTypeValue::Reference(reference) => result = write!(f, "Reference: PASS" ),
-			}
+			result = write!(f, "{}\n", entry);
 		}
+		result = write!(f,"==============\n");
 		result
 	}
 }

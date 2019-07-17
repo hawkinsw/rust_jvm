@@ -136,12 +136,32 @@ impl JvmThread {
 				self.execute_iconst_x(5, frame);
 				pc_incr = 1;
 			},
+			Some(OperandCodes::OPCODE_ireturn) => {
+				if self.debug {
+					println!("ireturn");
+				}
+				return OpcodeResult::Value((frame.operand_stack.pop().unwrap()));
+			},
 			Some(OperandCodes::OPCODE_invokestatic) => {
 				if self.debug {
 					println!("invokestatic");
 				}
-				self.execute_invokestatic(bytes, frame);
-				pc_incr = 3;
+
+				/*
+				 * Start by assuming failure.
+				 */
+				pc_incr = 0;
+
+				let invokestatic_result =
+					self.execute_invokestatic(bytes, frame);
+				if let Some(OpcodeResult::Value(v)) = invokestatic_result {
+					/*
+					 * Push the result of the invocation onto
+					 * the operand stack.
+					 */
+					frame.operand_stack.push(v);
+					pc_incr = 3;
+				}
 			},
 			Some(OperandCodes::OPCODE_pop) => {
 				if self.debug {
@@ -162,8 +182,8 @@ impl JvmThread {
 				JvmPrimitiveType::Integer, x)));
 	}
 
-	pub fn execute_invokestatic(&mut self, bytes: &[u8], frame: &mut Frame) {
-		let class = frame.class().unwrap();
+	pub fn execute_invokestatic(&mut self, bytes: &[u8], source_frame: &mut Frame) -> Option<OpcodeResult> {
+		let class = source_frame.class().unwrap();
 		let constant_pool = class.get_constant_pool_ref();
 		let method_index = (((bytes[1] as u16)<<8)|(bytes[2] as u16)) as usize;
 
@@ -196,9 +216,17 @@ impl JvmThread {
 										if self.debug {
 											println!("method: {}", method);
 										}
-										let mut frame = Frame::new();
-										frame.class = Some(Rc::clone(&invoked_class));
-										self.execute_method(&method, frame);
+										let mut invoked_frame = Frame::new();
+										invoked_frame.class = Some(Rc::clone(&invoked_class));
+										/*
+										 * TODO: Transfer the parameters from source
+										 * operand stack to the destination operand
+										 * stack!
+										 */
+										if let Some(v)=self.execute_method(&method, invoked_frame) {
+											println!("Returning from a method: {}!", v);
+											return Some(OpcodeResult::Value(v));
+										}
 									}
 								} else {
 									println!("Error: Could not execute static method {}.{}", class_name, method_name);
@@ -210,5 +238,6 @@ impl JvmThread {
 			},
 			_ => ()
 		};
+		None
 	}
 }
