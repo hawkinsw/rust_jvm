@@ -35,8 +35,7 @@ impl JvmThread {
 			}
 			if let Some(method) = class.get_method_ref_by_name(method_name) {
 				let mut frame = Frame::new();
-				frame.constant_pool = Some(class.get_constant_pool_ref());
-				frame.class = Some(&class);
+				frame.class = Some(Rc::clone(&class));
 				/*
 				 * Load up the frame's stack with the CLI arguments.
 				 */
@@ -53,7 +52,8 @@ impl JvmThread {
 	}
 
 	fn execute_method(&mut self, method: &Method, mut frame: Frame) -> bool {
-		if let Some(code)=method.get_code(frame.constant_pool.unwrap()) {
+		let class = frame.class().unwrap();
+		if let Some(code)=method.get_code(class.get_constant_pool_ref()) {
 			let mut pc = 0;
 			let mut pc_incr = self.execute_opcode(&code[pc ..], &mut frame);
 			while pc_incr != 0 {
@@ -69,8 +69,8 @@ impl JvmThread {
 
 	fn execute_opcode(&mut self, bytes: &[u8], frame: &mut Frame) -> usize {
 		let mut pc_incr: usize;
-		let constant_pool = frame.constant_pool.unwrap();
-		let class = frame.class.unwrap();
+		let class = frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
 
 		let opcode = bytes[0];
 		if self.debug {
@@ -153,8 +153,8 @@ impl JvmThread {
 	}
 
 	pub fn execute_invokestatic(&mut self, bytes: &[u8], frame: &mut Frame) {
-		let constant_pool = frame.constant_pool.unwrap();
-		let class = frame.class.unwrap();
+		let class = frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
 		let method_index = (((bytes[1] as u16)<<8)|(bytes[2] as u16)) as usize;
 
 		match constant_pool.get_constant_ref(method_index) {
@@ -187,8 +187,7 @@ impl JvmThread {
 											println!("method: {}", method);
 										}
 										let mut frame = Frame::new();
-										frame.constant_pool = Some(invoked_class.get_constant_pool_ref());
-										frame.class = Some(&invoked_class);
+										frame.class = Some(Rc::clone(&invoked_class));
 										self.execute_method(&method, frame);
 									}
 								} else {

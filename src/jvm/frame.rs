@@ -5,19 +5,26 @@ use std::rc::Rc;
 use std::fmt;
 
 #[derive(Clone,Default)]
-pub struct Frame<'a> {
-	pub constant_pool: Option<&'a ConstantPool>,
-	pub operand_stack: Vec<JvmTypeValue<'a>>,
-	pub class: Option<&'a Rc<Class>>
+pub struct Frame {
+	pub operand_stack: Vec<JvmTypeValue>,
+	pub class: Option<Rc<Class>>
 }
 
-impl<'a> Frame<'a> {
+impl Frame {
 	pub fn new() -> Self {
-		Frame{operand_stack: Vec::<JvmTypeValue<'a>>::new(), constant_pool: None, class: None}
+		Frame{operand_stack: Vec::<JvmTypeValue>::new(), class: None}
+	}
+
+	pub fn class(&self) -> Option<Rc<Class>> {
+		if let Some(class) = &self.class {
+			Some(Rc::clone(class))
+		} else {
+			None
+		}
 	}
 }
 
-impl<'a> fmt::Display for Frame<'a> {
+impl fmt::Display for Frame {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let mut result: fmt::Result;
 		result = write!(f,"");

@@ -1,4 +1,5 @@
 use std::fmt;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub enum JvmPrimitiveType {
@@ -7,8 +8,8 @@ pub enum JvmPrimitiveType {
 }
 
 #[derive(Clone)]
-pub enum JvmReferenceType<'a> {
-	Array(&'a JvmTypeValue<'a>, u64),
+pub enum JvmReferenceType {
+	Array(Rc<JvmTypeValue>, u64),
 	Class(String),
 	Interface(String),
 }
@@ -26,14 +27,14 @@ impl JvmPrimitiveTypeValue {
 }
 
 #[derive(Clone)]
-pub struct JvmReferenceTypeValue<'a> {
-	tipe: JvmReferenceType<'a>,
+pub struct JvmReferenceTypeValue {
+	tipe: JvmReferenceType,
 	reference: u64,
 }
 
-impl<'a> JvmReferenceTypeValue<'a> {
-	pub fn new_array(dimension: u64, component_type: &'a JvmTypeValue<'a>, reference: u64) -> Self {
-		JvmReferenceTypeValue{tipe: JvmReferenceType::Array(component_type, dimension), reference: reference}
+impl JvmReferenceTypeValue {
+	pub fn new_array(dimension: u64, component_type: JvmTypeValue, reference: u64) -> Self {
+		JvmReferenceTypeValue{tipe: JvmReferenceType::Array(Rc::new(component_type), dimension), reference: reference}
 	}
 
 	pub fn new_class(name: String, reference: u64) -> Self {
@@ -56,7 +57,7 @@ impl fmt::Display for JvmPrimitiveTypeValue {
 }
 
 #[derive(Clone)]
-pub enum JvmTypeValue<'a> {
+pub enum JvmTypeValue {
 	Primitive(JvmPrimitiveTypeValue),
-	Reference(JvmReferenceTypeValue<'a>),
+	Reference(JvmReferenceTypeValue),
 }
