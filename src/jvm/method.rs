@@ -30,6 +30,32 @@ impl Method {
 		None
 	}
 
+	pub fn get_parameter_count(&self, cp: &ConstantPool) -> usize {
+		let mut count = 0;
+		if let Constant::Utf8(_,_,_,s) = cp.get_constant_ref(self.descriptor_index as usize) {
+			let signature = s.as_bytes();
+			if signature[0] == '(' as u8 {
+				let mut i = 1;
+				while i < signature.len() && signature[i] != ')' as u8 {
+					if signature[i] == 'L' as u8 {
+						/*
+						 * Lsome/class/name;
+						 * means a reference to a class of that name.
+						 */
+						while signature[i] != ';' as u8 {
+							i = i + 1;
+						}
+					} else if signature[i] == '[' as u8 {
+						i = i + 1;
+					}
+					i = i + 1;
+					count += 1;
+				}
+			}
+		}
+		count
+	}
+
 	pub fn byte_len(&self) -> usize {
 		self.byte_len
 	}

@@ -205,31 +205,58 @@ impl JvmThread {
 								 * 5. Execute the method
 								 */
 								if !self.methodarea.is_class_loaded(&class_name) {
-									println!("We do need to load the class!");
+									assert!(false, "We do need to load the class!");
 									/*
 									 * TODO
 									 */
 								} 
 
 								if let Some(invoked_class) = self.methodarea.get_class_rc(&class_name) {
-									if let Some(method) = invoked_class.get_methods_ref().get_by_name(method_name, invoked_class.get_constant_pool_ref()) {
+									if let Some(method) = invoked_class.
+									                      get_methods_ref().
+									                      get_by_name(method_name,
+									                                  invoked_class.
+                                                    get_constant_pool_ref()) {
 										if self.debug {
 											println!("method: {}", method);
 										}
+
 										let mut invoked_frame = Frame::new();
 										invoked_frame.class = Some(Rc::clone(&invoked_class));
+
 										/*
-										 * TODO: Transfer the parameters from source
-										 * operand stack to the destination operand
-										 * stack!
+										 * Move the parameters from the source stack to the
+										 * invoked stack.
 										 */
+										let parameter_count =
+											method.get_parameter_count(
+												invoked_class.get_constant_pool_ref());
+										for i in 0 .. parameter_count {
+											if let Some(parameter) = source_frame.operand_stack.pop(){
+												invoked_frame.operand_stack.push(parameter);
+											} else {
+												assert!(false,
+												  "Not enough parameters on the stack to call {}.{}.",
+												  class_name,
+												  method_name);
+											}
+										}
+
+										if self.debug {
+											println!("Parameter count: {}", parameter_count);
+											println!("invoked_frame: {}", invoked_frame);
+										}
+
 										if let Some(v)=self.execute_method(&method, invoked_frame) {
 											println!("Returning from a method: {}!", v);
 											return Some(OpcodeResult::Value(v));
 										}
 									}
 								} else {
-									println!("Error: Could not execute static method {}.{}", class_name, method_name);
+									assert!(false,
+									        "Error: Could not execute method {}.{}",
+									        class_name,
+									        method_name);
 								}
 							}
 						}
