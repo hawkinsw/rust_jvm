@@ -197,6 +197,18 @@ impl JvmThread {
 				}
 				pc_incr = 1;
 			},
+			Some(OperandCodes::OPCODE_iadd) => {
+				if self.debug {
+					println!("iadd");
+				}
+				if let Some(JvmTypeValue::Primitive(op1_primitive)) = frame.operand_stack.pop() {
+					if let Some(JvmTypeValue::Primitive(op2_primitive)) = frame.operand_stack.pop() {
+						frame.operand_stack.push(JvmTypeValue::Primitive(JvmPrimitiveTypeValue::new(JvmPrimitiveType::Integer, op1_primitive.value + op2_primitive.value)));
+					}
+				}
+				pc_incr = 1;
+			},
+
 			_ => {
 				pc_incr = 0;
 			}

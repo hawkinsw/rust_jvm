@@ -17,7 +17,7 @@ pub enum JvmReferenceType {
 #[derive(Clone)]
 pub struct JvmPrimitiveTypeValue {
 	tipe: JvmPrimitiveType,
-	value: i64,
+	pub value: i64,
 }
 
 impl JvmPrimitiveTypeValue {

@@ -16,5 +16,6 @@ enum_from_primitive! {
 		OPCODE_ireturn = 0xac,
 		OPCODE_invokestatic = 0xb8,
 		OPCODE_pop = 0x57,
+		OPCODE_iadd = 0x60,
 	}
 }
