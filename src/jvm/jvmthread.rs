@@ -136,6 +136,34 @@ impl JvmThread {
 				self.execute_iconst_x(5, frame);
 				pc_incr = 1;
 			},
+			Some(OperandCodes::OPCODE_iload_0) => {
+				if self.debug {
+					println!("iload_0");
+				}
+				self.execute_iload_x(0, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iload_1) => {
+				if self.debug {
+					println!("iload_1");
+				}
+				self.execute_iload_x(1, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iload_2) => {
+				if self.debug {
+					println!("iload_2");
+				}
+				self.execute_iload_x(2, frame);
+				pc_incr = 1;
+			},
+			Some(OperandCodes::OPCODE_iload_3) => {
+				if self.debug {
+					println!("iload_3");
+				}
+				self.execute_iload_x(3, frame);
+				pc_incr = 1;
+			},
 			Some(OperandCodes::OPCODE_ireturn) => {
 				if self.debug {
 					println!("ireturn");
@@ -174,6 +202,10 @@ impl JvmThread {
 			}
 		}
 		OpcodeResult::Incr(pc_incr)
+	}
+
+	pub fn execute_iload_x(&mut self, x: usize, frame: &mut Frame) {
+		frame.operand_stack.push(frame.locals[x].clone());
 	}
 
 	pub fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
