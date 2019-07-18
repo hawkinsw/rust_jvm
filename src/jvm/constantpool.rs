@@ -57,6 +57,7 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 	fn from(bytes: &Vec<u8>) -> Self {
 		let mut offset = 0;
 		let mut constants: Vec<Constant>;
+		let mut skip = false;
 		let constants_pool_count: u16 = (bytes[offset + 0] as u16) << 8 |
 		                                (bytes[offset + 1] as u16) << 0;
 		offset += 2;
@@ -64,6 +65,11 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 		constants = repeat(Constant::Default()).take(constants_pool_count as usize).collect();
 
 		for i in 1 .. constants_pool_count as usize {
+			if skip {
+				skip = false;
+				continue;
+			}
+
 			match ConstantTags::from_u8(bytes[offset]) {
 				Some(ConstantTags::CONSTANT_Class) => {
 					let tag:u8 = bytes[offset];
@@ -112,12 +118,30 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 				},
 				Some(ConstantTags::CONSTANT_Float) => {
 					print!("Float\n");
+					assert!(false);
 				},
 				Some(ConstantTags::CONSTANT_Long) => {
 					print!("Long\n");
+					assert!(false);
 				},
 				Some(ConstantTags::CONSTANT_Double) => {
 					print!("Double\n");
+					let tag:u8 = bytes[offset];
+					let bytes:u64 = (bytes[offset + 1] as u64) << 56 |
+					                (bytes[offset + 2] as u64) << 48 |
+					                (bytes[offset + 3] as u64) << 40 |
+					                (bytes[offset + 4] as u64) << 32 |
+					                (bytes[offset + 5] as u64) << 24 |
+					                (bytes[offset + 6] as u64) << 16 |
+					                (bytes[offset + 7] as u64) << 8  |
+					                (bytes[offset + 8] as u64) << 0;
+					offset+=9;
+					constants[i] = Constant::Double(tag, bytes);
+					/*
+					 * From https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.4.5
+					 * "... then the next usable item in the pool is located at index n+2"
+					 */
+					skip = true;
 				},
 				Some(ConstantTags::CONSTANT_NameAndType) => {
 					let tag:u8 = bytes[offset];

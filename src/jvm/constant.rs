@@ -43,7 +43,7 @@ pub enum Constant {
 	Integer(u8, u32),
 	Float(),
 	Long(),
-	Double(),
+	Double(u8, u64),
 	NameAndType(u8, u16, u16),
 	Utf8(u8, Utf8Reserved, u16, String),
 	MethodHandle(),
@@ -97,6 +97,11 @@ impl fmt::Display for Constant {
 					tag,
 					value)
 			},
+			Constant::Double(tag, value) => {
+				write!(f, "Double: tag: {}, value: 0x{:x} (ieee754)",
+					tag,
+					value)
+			}
 			_ => write!(f, "Unknown")
 		}
 	}
