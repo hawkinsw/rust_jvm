@@ -233,7 +233,7 @@ impl JvmThread {
 												invoked_class.get_constant_pool_ref());
 										for i in 0 .. parameter_count {
 											if let Some(parameter) = source_frame.operand_stack.pop(){
-												invoked_frame.operand_stack.push(parameter);
+												invoked_frame.locals.push(parameter);
 											} else {
 												assert!(false,
 												  "Not enough parameters on the stack to call {}.{}.",

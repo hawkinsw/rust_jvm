@@ -7,12 +7,13 @@ use std::fmt;
 #[derive(Clone,Default)]
 pub struct Frame {
 	pub operand_stack: Vec<JvmTypeValue>,
-	pub class: Option<Rc<Class>>
+	pub class: Option<Rc<Class>>,
+	pub locals: Vec<JvmTypeValue>
 }
 
 impl Frame {
 	pub fn new() -> Self {
-		Frame{operand_stack: Vec::<JvmTypeValue>::new(), class: None}
+		Frame{operand_stack: Vec::<JvmTypeValue>::new(), class: None, locals: Vec::<JvmTypeValue>::new()}
 	}
 
 	pub fn class(&self) -> Option<Rc<Class>> {
@@ -32,6 +33,12 @@ impl fmt::Display for Frame {
 			result = write!(f, "{}\n", entry);
 		}
 		result = write!(f,"==============\n");
+		result = write!(f,"Locals:\n");
+		for entry in &self.locals {
+			result = write!(f, "{}\n", entry);
+		}
+		result = write!(f,"==============\n");
+
 		result
 	}
 }
