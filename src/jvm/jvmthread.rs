@@ -209,25 +209,27 @@ impl JvmThread {
 				if self.debug {
 					println!("iadd");
 				}
-				if let Some(JvmTypeValue::Primitive(op1_primitive)) = frame.operand_stack.pop() {
-					if let Some(JvmTypeValue::Primitive(op2_primitive)) = frame.operand_stack.pop()
-					{
-						frame.operand_stack.push(JvmTypeValue::Primitive(
-							JvmPrimitiveTypeValue::new(
-								JvmPrimitiveType::Integer,
-								op1_primitive.value + op2_primitive.value,
-							),
-						));
-					}
-				}
+				self.execute_iadd(frame);
 				pc_incr = 1;
 			}
-
 			_ => {
 				pc_incr = 0;
 			}
 		}
 		OpcodeResult::Incr(pc_incr)
+	}
+
+	pub fn execute_iadd(&mut self, frame: &mut Frame) {
+		if let Some(JvmTypeValue::Primitive(op1_primitive)) = frame.operand_stack.pop() {
+			if let Some(JvmTypeValue::Primitive(op2_primitive)) = frame.operand_stack.pop() {
+				frame
+					.operand_stack
+					.push(JvmTypeValue::Primitive(JvmPrimitiveTypeValue::new(
+						JvmPrimitiveType::Integer,
+						op1_primitive.value + op2_primitive.value,
+					)));
+			}
+		}
 	}
 
 	pub fn execute_iload_x(&mut self, x: usize, frame: &mut Frame) {
