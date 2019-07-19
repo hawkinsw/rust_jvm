@@ -2,6 +2,7 @@ use enum_primitive::FromPrimitive;
 use jvm::constant::Constant;
 use jvm::frame::Frame;
 use jvm::method::Method;
+use jvm::method::MethodAccessFlags;
 use jvm::methodarea::MethodArea;
 use jvm::opcodes::OperandCodes;
 use jvm::typevalues::JvmPrimitiveType;
@@ -43,6 +44,15 @@ impl JvmThread {
 				println!("Loaded class {}.\n", class);
 			}
 			if let Some(method) = class.get_method_ref_by_name(method_name) {
+				if method.access_flags
+					!= ((MethodAccessFlags::Public as u16) | (MethodAccessFlags::Static as u16))
+				{
+					if self.debug {
+						println!("Main method is not public and static.");
+					}
+					assert!(false, "Main method is not public and static.");
+				}
+
 				let mut frame = Frame::new();
 				frame.class = Some(Rc::clone(&class));
 				/*
@@ -203,6 +213,7 @@ impl JvmThread {
 				if self.debug {
 					println!("pop");
 				}
+				frame.operand_stack.pop();
 				pc_incr = 1;
 			}
 			Some(OperandCodes::OPCODE_iadd) => {
@@ -213,6 +224,7 @@ impl JvmThread {
 				pc_incr = 1;
 			}
 			_ => {
+				assert!(false, "Unrecognized opcode: 0x{:x}", opcode);
 				pc_incr = 0;
 			}
 		}
