@@ -47,8 +47,8 @@ impl Jvm {
 		&self,
 		start_class: &String,
 		start_function: &String,
-		classpath: &[String],
-		args: &[String],
+		classpath: &[&str],
+		args: &[&str],
 	) -> bool {
 		/*
 		 * Create a VM and start running!

@@ -40,32 +40,43 @@ fn main() {
 				.required(true)
 				.index(1),
 		)
-		.arg(Arg::with_name("method").help("Method to execute at start."))
-		.arg(Arg::with_name("debug").help("Class to execute.").short("d"))
+		.arg(Arg::with_name("method").help("Main method to execute."))
+		.arg(
+			Arg::with_name("debug")
+				.help("Enable debugging output.")
+				.short("d"),
+		)
 		.arg(
 			Arg::with_name("classpath")
 				.help("Class path.")
 				.short("c")
 				.takes_value(true),
 		)
+		.arg(
+			Arg::with_name("args")
+				.help("Java application arguments.")
+				.short("a")
+				.takes_value(true)
+				.multiple(true),
+		)
 		.get_matches();
 
-	let main_class_name = format!("{}", cli_matches.value_of("class").unwrap());
-	let method = cli_matches.value_of("method").unwrap_or("main").to_string();
-	let classpath = cli_matches
-		.value_of("classpath")
-		.unwrap_or("./")
-		.to_string();
 	if cli_matches.is_present("debug") {
 		debug = true;
 	}
 
+	let class = format!("{}", cli_matches.value_of("class").unwrap());
+	let method = cli_matches.value_of("method").unwrap_or("main").to_string();
+
+	let classpath_arg = cli_matches.value_of("classpath").unwrap_or("");
+	let classpath: Vec<&str> = classpath_arg.split(":").collect();
+
+	let args: Vec<&str> = cli_matches
+		.values_of("args")
+		.unwrap_or(clap::Values::default())
+		.collect();
+
 	if let Some(jvm) = jvm::Jvm::new(debug) {
-		jvm.run(
-			&main_class_name,
-			&method,
-			&[classpath],
-			&["testing".to_string()],
-		);
+		jvm.run(&class, &method, &classpath, &args);
 	}
 }
