@@ -2,7 +2,7 @@ all:
 	cargo build
 
 test: all
-	./target/debug/jvm java_test/Hello main
+	./target/debug/jvm -c ./java_test/ Hello main
 
 test-debug: all
-	./target/debug/jvm -d java_test/Hello main 
+	./target/debug/jvm -d -c ./java_test/ Hello main

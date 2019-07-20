@@ -1,6 +1,6 @@
 /*
  * FILE: XXXXX
- * DESCRIPTION: 
+ * DESCRIPTION:
  *
  * Copyright (c) 2019, Will Hawkins
  *
@@ -21,6 +21,7 @@
  */
 use enum_primitive::FromPrimitive;
 use jvm::constant::Constant;
+use jvm::environment::Environment;
 use jvm::frame::Frame;
 use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
@@ -29,6 +30,8 @@ use jvm::opcodes::OperandCodes;
 use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmPrimitiveTypeValue;
 use jvm::typevalues::JvmTypeValue;
+use std::fs;
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct JvmThread {
@@ -51,16 +54,40 @@ impl JvmThread {
 		}
 	}
 
-	pub fn run(&mut self, class_filename: &String, method_name: &String, args: &[String]) -> bool {
+	pub fn run(
+		&mut self,
+		class_name: &String,
+		method_name: &String,
+		environment: &Environment,
+	) -> bool {
 		/*
 		 * 1. Create a method area.
-		 * 2. Load the class into the method area.
+		 * 2. Load classes in the classpath  into the method area.
 		 * 3. Load the method.
 		 * 4. Create a frame.
 		 * 5. Load the frame with arguments.
 		 * 6. Execute the method.
 		 */
-		if let Some(class) = self.methodarea.load_class_from_file(class_filename) {
+
+		for path in environment.classpath {
+			if let Ok(dir_list) = fs::read_dir(Path::new(path)) {
+				for class_entry in dir_list {
+					if let Ok(class_entry) = class_entry {
+						if let Some(class_filename) = class_entry.path().to_str() {
+							let class_filename = class_filename.to_string();
+							if class_filename.ends_with("class") {
+								if self.debug {
+									println!("Loading class file {}", class_filename);
+								}
+								self.methodarea.load_class_from_file(&class_filename);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if let Some(class) = self.methodarea.get_class_rc(class_name) {
 			if self.debug {
 				println!("Loaded class {}.\n", class);
 			}

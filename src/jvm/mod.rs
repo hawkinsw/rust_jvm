@@ -1,6 +1,6 @@
 /*
  * FILE: XXXXX
- * DESCRIPTION: 
+ * DESCRIPTION:
  *
  * Copyright (c) 2019, Will Hawkins
  *
@@ -24,6 +24,7 @@ pub mod attribute;
 pub mod class;
 pub mod constant;
 pub mod constantpool;
+pub mod environment;
 pub mod exceptions;
 pub mod field;
 pub mod frame;
@@ -44,28 +45,24 @@ impl Jvm {
 
 	pub fn run(
 		&self,
-		start_class_filename: &String,
+		start_class: &String,
 		start_function: &String,
+		classpath: &[String],
 		args: &[String],
 	) -> bool {
 		/*
 		 * Create a VM and start running!
 		 */
+		let env = environment::Environment::new(classpath, args);
 		let mut thread = jvmthread::JvmThread::new(self.debug);
-		if thread.run(start_class_filename, start_function, args) {
+		if thread.run(start_class, start_function, &env) {
 			if self.debug {
-				println!(
-					"Success running {}.{}",
-					start_class_filename, start_function
-				);
+				println!("Success running {}.{}", start_class, start_function);
 			}
 			return true;
 		}
 		if self.debug {
-			println!(
-				"Failure running {}.{}",
-				start_class_filename, start_function
-			);
+			println!("Failure running {}.{}", start_class, start_function);
 		}
 		false
 	}
