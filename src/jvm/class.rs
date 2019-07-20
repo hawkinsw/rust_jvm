@@ -1,6 +1,6 @@
 /*
  * FILE: XXXXX
- * DESCRIPTION: 
+ * DESCRIPTION:
  *
  * Copyright (c) 2019, Will Hawkins
  *
