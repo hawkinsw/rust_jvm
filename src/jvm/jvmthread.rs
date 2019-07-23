@@ -237,6 +237,15 @@ impl JvmThread {
 				}
 				return OpcodeResult::Value((frame.operand_stack.pop().unwrap()));
 			}
+			Some(OperandCodes::OPCODE_return) => {
+				if self.debug {
+					println!("return");
+				}
+				return OpcodeResult::Value(JvmTypeValue::Primitive(JvmPrimitiveTypeValue::new(
+					JvmPrimitiveType::Void,
+					0,
+				)));
+			}
 			Some(OperandCodes::OPCODE_invokestatic) => {
 				if self.debug {
 					println!("invokestatic");
@@ -248,14 +257,7 @@ impl JvmThread {
 				pc_incr = 0;
 
 				let invokestatic_result = self.execute_invokestatic(bytes, frame);
-				if let Some(OpcodeResult::Value(v)) = invokestatic_result {
-					/*
-					 * Push the result of the invocation onto
-					 * the operand stack.
-					 */
-					frame.operand_stack.push(v);
-					pc_incr = 3;
-				}
+				pc_incr = self.handle_invoke_result(invokestatic_result, frame, 3);
 			}
 			Some(OperandCodes::OPCODE_pop) => {
 				if self.debug {
@@ -277,6 +279,52 @@ impl JvmThread {
 			}
 		}
 		OpcodeResult::Incr(pc_incr)
+	}
+
+	pub fn handle_invoke_result(
+		&self,
+		result: Option<OpcodeResult>,
+		frame: &mut Frame,
+		step: usize,
+	) -> usize {
+		if let Some(OpcodeResult::Value(v)) = result {
+			/*
+			 * Push the result of the invocation onto
+			 * the operand stack. Do not push anything
+			 * on to the stack if the return is Void.
+			 */
+			match v.clone() {
+				/*
+				 * The JvmTypeValue::Primitive with tipe == JvmPrimitiveType::Void
+				 * is a sentinel value that indicates a return from a Void function.
+				 */
+				JvmTypeValue::Primitive(p) => {
+					match p.tipe {
+						JvmPrimitiveType::Void => {
+							if self.debug {
+								println!("Not pushing a void onto the caller's stack.");
+							}
+						}
+						/*
+						 * Any JvmTypeValue::Primitive other than a JvmPrimitive::Void
+						 * gets pushed on to the stack.
+						 */
+						_ => {
+							frame.operand_stack.push(v);
+						}
+					}
+				}
+				/*
+				 * A non-JvmTypeValue::Primitive value always gets pushed
+				 * on to the stack.
+				 */
+				_ => {
+					frame.operand_stack.push(v);
+				}
+			}
+			return step;
+		}
+		return 0;
 	}
 
 	pub fn execute_iadd(&mut self, frame: &mut Frame) {

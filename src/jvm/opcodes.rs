@@ -35,6 +35,7 @@ enum_from_primitive! {
 		OPCODE_iload_2 = 0x1c,
 		OPCODE_iload_3 = 0x1d,
 		OPCODE_ireturn = 0xac,
+		OPCODE_return = 0xb1,
 		OPCODE_invokestatic = 0xb8,
 		OPCODE_pop = 0x57,
 		OPCODE_iadd = 0x60,

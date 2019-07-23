@@ -26,6 +26,7 @@ use std::rc::Rc;
 pub enum JvmPrimitiveType {
 	Boolean,
 	Integer,
+	Void,
 }
 
 #[derive(Clone)]
@@ -37,7 +38,7 @@ pub enum JvmReferenceType {
 
 #[derive(Clone)]
 pub struct JvmPrimitiveTypeValue {
-	tipe: JvmPrimitiveType,
+	pub tipe: JvmPrimitiveType,
 	pub value: i64,
 }
 
@@ -52,7 +53,7 @@ impl JvmPrimitiveTypeValue {
 
 #[derive(Clone)]
 pub struct JvmReferenceTypeValue {
-	tipe: JvmReferenceType,
+	pub tipe: JvmReferenceType,
 	reference: u64,
 }
 
@@ -84,6 +85,7 @@ impl fmt::Display for JvmPrimitiveTypeValue {
 		let type_name = match self.tipe {
 			JvmPrimitiveType::Boolean => "Boolean",
 			JvmPrimitiveType::Integer => "Integer",
+			JvmPrimitiveType::Void => "Void",
 		};
 		write!(f, "{}: {}", type_name, self.value)
 	}
