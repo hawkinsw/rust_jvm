@@ -117,7 +117,19 @@ impl JvmThread {
 					println!("Frame: {}", frame);
 				}
 
-				self.execute_method(method, frame);
+				if let Some(v) = self.execute_method(method, frame) {
+					match v {
+						JvmTypeValue::Primitive(p) => match p.tipe {
+							JvmPrimitiveType::Void => {}
+							_ => {
+								assert!(false, "Main method returned a value!");
+							}
+						},
+						_ => {
+							assert!(false, "Main method returned a value!");
+						}
+					}
+				}
 				return true;
 			}
 		}
