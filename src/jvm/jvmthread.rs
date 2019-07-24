@@ -22,6 +22,8 @@
 use enum_primitive::FromPrimitive;
 use jvm::constant::Constant;
 use jvm::environment::Environment;
+use jvm::error::FatalError;
+use jvm::error::FatalErrorType;
 use jvm::frame::Frame;
 use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
@@ -399,13 +401,6 @@ impl JvmThread {
 								 * 4. Populate the frame.
 								 * 5. Execute the method
 								 */
-								if !self.methodarea.is_class_loaded(&class_name) {
-									assert!(false, "We do need to load the class!");
-									/*
-									 * TODO
-									 */
-								}
-
 								if let Some(invoked_class) =
 									self.methodarea.get_class_rc(&class_name)
 								{
@@ -453,11 +448,10 @@ impl JvmThread {
 										}
 									}
 								} else {
-									assert!(
-										false,
-										"Error: Could not execute method {}.{}",
-										class_name, method_name
-									);
+									FatalError::new(FatalErrorType::ClassNotLoaded(
+										class_name.clone(),
+									))
+									.call()
 								}
 							}
 						}

@@ -25,6 +25,7 @@ pub mod class;
 pub mod constant;
 pub mod constantpool;
 pub mod environment;
+pub mod error;
 pub mod exceptions;
 pub mod field;
 pub mod frame;
