@@ -304,7 +304,7 @@ impl JvmThread {
 		OpcodeResult::Incr(pc_incr)
 	}
 
-	pub fn handle_invoke_result(
+	fn handle_invoke_result(
 		&self,
 		result: Option<OpcodeResult>,
 		frame: &mut Frame,
@@ -350,7 +350,7 @@ impl JvmThread {
 		return 0;
 	}
 
-	pub fn execute_iadd(&mut self, frame: &mut Frame) {
+	fn execute_iadd(&mut self, frame: &mut Frame) {
 		if let Some(JvmTypeValue::Primitive(op1_primitive)) = frame.operand_stack.pop() {
 			if let Some(JvmTypeValue::Primitive(op2_primitive)) = frame.operand_stack.pop() {
 				frame
@@ -363,11 +363,11 @@ impl JvmThread {
 		}
 	}
 
-	pub fn execute_iload_x(&mut self, x: usize, frame: &mut Frame) {
+	fn execute_iload_x(&mut self, x: usize, frame: &mut Frame) {
 		frame.operand_stack.push(frame.locals[x].clone());
 	}
 
-	pub fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
+	fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
 		frame
 			.operand_stack
 			.push(JvmTypeValue::Primitive(JvmPrimitiveTypeValue::new(
@@ -376,7 +376,7 @@ impl JvmThread {
 			)));
 	}
 
-	pub fn execute_invokestatic(
+	fn execute_invokestatic(
 		&mut self,
 		bytes: &[u8],
 		source_frame: &mut Frame,

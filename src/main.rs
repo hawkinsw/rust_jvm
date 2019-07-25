@@ -19,12 +19,10 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
-#[macro_use]
-extern crate enum_primitive;
 extern crate clap;
+extern crate enum_primitive;
+extern crate jvm;
 use clap::{App, Arg};
-mod jvm;
-use jvm::jvmthread::JvmThread;
 
 fn main() {
 	let mut debug: bool = false;
@@ -76,7 +74,7 @@ fn main() {
 		.unwrap_or(clap::Values::default())
 		.collect();
 
-	if let Some(jvm) = jvm::Jvm::new(debug) {
+	if let Some(jvm) = jvm::jvm::Jvm::new(debug) {
 		jvm.run(&class, &method, &classpath, &args);
 	}
 }

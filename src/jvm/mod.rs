@@ -20,20 +20,20 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use std::fmt;
-pub mod attribute;
-pub mod class;
-pub mod constant;
-pub mod constantpool;
-pub mod environment;
-pub mod error;
-pub mod exceptions;
-pub mod field;
-pub mod frame;
-pub mod jvmthread;
-pub mod method;
-pub mod methodarea;
-pub mod opcodes;
-pub mod typevalues;
+mod attribute;
+mod class;
+mod constant;
+mod constantpool;
+mod environment;
+mod error;
+mod exceptions;
+mod field;
+mod frame;
+mod jvmthread;
+mod method;
+mod methodarea;
+mod opcodes;
+mod typevalues;
 
 use jvm::methodarea::MethodArea;
 use std::sync::Arc;

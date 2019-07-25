@@ -3,6 +3,14 @@ name = "jvm"
 version = "0.1.0"
 authors = ["Will Hawkins <hawkinsw@borlaugic.com>"]
 
+[lib]
+name = "jvm"
+path = "src/lib.rs"
+
+[[bin]]
+name = "jvm"
+path = "src/main.rs"
+
 [dependencies]
 enum_primitive = "0.1.1"
 num = "0.2.0"
