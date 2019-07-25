@@ -35,6 +35,10 @@ pub mod methodarea;
 pub mod opcodes;
 pub mod typevalues;
 
+use jvm::methodarea::MethodArea;
+use std::sync::Arc;
+use std::sync::Mutex;
+
 pub struct Jvm {
 	debug: bool,
 }
@@ -55,7 +59,8 @@ impl Jvm {
 		 * Create a VM and start running!
 		 */
 		let env = environment::Environment::new(classpath, args);
-		let mut thread = jvmthread::JvmThread::new(self.debug);
+		let methodarea = Arc::new(Mutex::new(MethodArea::new(self.debug)));
+		let mut thread = jvmthread::JvmThread::new(self.debug, methodarea);
 		if thread.run(start_class, start_function, &env) {
 			if self.debug {
 				println!("Success running {}.{}", start_class, start_function);

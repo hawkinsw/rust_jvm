@@ -20,6 +20,7 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use enum_primitive::FromPrimitive;
+use jvm::class::Class;
 use jvm::constant::Constant;
 use jvm::environment::Environment;
 use jvm::error::FatalError;
@@ -35,10 +36,12 @@ use jvm::typevalues::JvmTypeValue;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 pub struct JvmThread {
 	debug: bool,
-	methodarea: MethodArea,
+	methodarea: Arc<Mutex<MethodArea>>,
 	pc: usize,
 }
 
@@ -48,10 +51,10 @@ enum OpcodeResult {
 }
 
 impl JvmThread {
-	pub fn new(debug: bool) -> Self {
+	pub fn new(debug: bool, methodarea: Arc<Mutex<MethodArea>>) -> Self {
 		JvmThread {
 			debug: debug,
-			methodarea: MethodArea::new(debug),
+			methodarea: methodarea,
 			pc: 0,
 		}
 	}
@@ -81,7 +84,9 @@ impl JvmThread {
 								if self.debug {
 									println!("Loading class file {}", class_filename);
 								}
-								self.methodarea.load_class_from_file(&class_filename);
+								if let Ok(mut methodarea) = self.methodarea.lock() {
+									(*methodarea).load_class_from_file(&class_filename);
+								}
 							}
 						}
 					}
@@ -89,7 +94,11 @@ impl JvmThread {
 			}
 		}
 
-		if let Some(class) = self.methodarea.get_class_rc(class_name) {
+		let mut class_or: Option<Rc<Class>> = None;
+		if let Ok(methodarea) = self.methodarea.lock() {
+			class_or = (*methodarea).get_class_rc(class_name);
+		}
+		if let Some(class) = class_or {
 			if self.debug {
 				println!("Loaded class {}.\n", class);
 			}
@@ -401,9 +410,11 @@ impl JvmThread {
 								 * 4. Populate the frame.
 								 * 5. Execute the method
 								 */
-								if let Some(invoked_class) =
-									self.methodarea.get_class_rc(&class_name)
-								{
+								let mut invoked_class_or: Option<Rc<Class>> = None;
+								if let Ok(mut methodarea) = self.methodarea.lock() {
+									invoked_class_or = (*methodarea).get_class_rc(class_name);
+								}
+								if let Some(invoked_class) = invoked_class_or {
 									if let Some(method) =
 										invoked_class.get_methods_ref().get_by_name(
 											method_name,
