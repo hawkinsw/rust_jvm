@@ -19,14 +19,17 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
+use jvm::error::FatalError;
+use jvm::error::FatalErrorType;
 use std::fmt;
 use std::rc::Rc;
 
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 pub enum JvmPrimitiveType {
 	Boolean,
 	Integer,
 	Void,
+	Invalid,
 }
 
 #[derive(Clone)]
@@ -86,6 +89,7 @@ impl fmt::Display for JvmPrimitiveTypeValue {
 			JvmPrimitiveType::Boolean => "Boolean",
 			JvmPrimitiveType::Integer => "Integer",
 			JvmPrimitiveType::Void => "Void",
+			JvmPrimitiveType::Invalid => "Invalid",
 		};
 		write!(f, "{}: {}", type_name, self.value)
 	}
@@ -105,4 +109,55 @@ impl fmt::Display for JvmTypeValue {
 pub enum JvmTypeValue {
 	Primitive(JvmPrimitiveTypeValue),
 	Reference(JvmReferenceTypeValue),
+}
+
+#[derive(Clone)]
+pub enum JvmType {
+	Primitive(JvmPrimitiveType),
+	Reference(JvmReferenceType),
+}
+
+impl PartialEq for JvmType {
+	fn eq(&self, other: &Self) -> bool {
+		match self {
+			JvmType::Primitive(s) => match other {
+				JvmType::Primitive(o) => {
+					println!("Comparing two primitives.");
+					s == o
+				}
+				_ => {
+					println!("Comparing a primitive with a non-primitive.");
+					false
+				}
+			},
+			JvmType::Reference(s) => match other {
+				JvmType::Reference(o) => {
+					/*
+					 * TODO: Compare two reference types
+					 */
+					assert!(false, "TODO: Compare two reference types.");
+					false
+				}
+				_ => {
+					println!("Comparing a reference with a non-reference.");
+					false
+				}
+			},
+		}
+	}
+}
+
+impl From<&[u8]> for JvmType {
+	fn from(from: &[u8]) -> Self {
+		if from[0] == 'V' as u8 {
+			JvmType::Primitive(JvmPrimitiveType::Void)
+		} else if from[0] == 'I' as u8 {
+			JvmType::Primitive(JvmPrimitiveType::Integer)
+		} else if from[0] == 'Z' as u8 {
+			JvmType::Primitive(JvmPrimitiveType::Boolean)
+		} else {
+			FatalError::new(FatalErrorType::InvalidFieldType).call();
+			JvmType::Primitive(JvmPrimitiveType::Invalid)
+		}
+	}
 }

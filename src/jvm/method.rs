@@ -24,6 +24,10 @@ use jvm::attribute::Attributes;
 use jvm::constant::Constant;
 use jvm::constant::Utf8Reserved;
 use jvm::constantpool::ConstantPool;
+use jvm::error::FatalError;
+use jvm::error::FatalErrorType;
+use jvm::typevalues::JvmPrimitiveType;
+use jvm::typevalues::JvmType;
 use std::fmt;
 use std::iter::repeat;
 
@@ -67,6 +71,21 @@ impl Method {
 			}
 		}
 		None
+	}
+
+	pub fn get_return_type(&self, cp: &ConstantPool) -> JvmType {
+		let mut result = JvmType::Primitive(JvmPrimitiveType::Invalid);
+		if let Constant::Utf8(_, _, _, s) = cp.get_constant_ref(self.descriptor_index as usize) {
+			let mut signature = s.as_bytes();
+			if let Some(mut index) = s.find(')') {
+				index = index + 1;
+				result = JvmType::from(&signature[index..])
+			}
+		}
+		if result == JvmType::Primitive(JvmPrimitiveType::Invalid) {
+			FatalError::new(FatalErrorType::InvalidMethodDescriptor).call();
+		}
+		return result;
 	}
 
 	pub fn get_parameter_count(&self, cp: &ConstantPool) -> usize {
