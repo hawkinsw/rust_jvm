@@ -2,6 +2,11 @@ use std::fmt;
 
 pub enum FatalErrorType {
 	ClassNotLoaded(String),
+	MainMethodNotPublicStatic,
+	MainMethodNotVoid,
+	InvalidFieldType,
+	InvalidMethodDescriptor,
+	VoidMethodReturnedValue,
 }
 
 impl fmt::Display for FatalErrorType {
@@ -10,6 +15,11 @@ impl fmt::Display for FatalErrorType {
 			FatalErrorType::ClassNotLoaded(s) => {
 				write!(f, "Class {} is required, but couldn't be found.", s)
 			}
+			FatalErrorType::MainMethodNotPublicStatic => {
+				write!(f, "Main method is not public or not static.")
+			}
+			FatalErrorType::MainMethodNotVoid => write!(f, "Main method is not void."),
+			FatalErrorType::InvalidFieldType => write!(f, "Main method is not void."),
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
 	}

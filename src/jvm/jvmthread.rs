@@ -32,6 +32,7 @@ use jvm::methodarea::MethodArea;
 use jvm::opcodes::OperandCodes;
 use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmPrimitiveTypeValue;
+use jvm::typevalues::JvmType;
 use jvm::typevalues::JvmTypeValue;
 use std::fs;
 use std::path::Path;
@@ -106,12 +107,14 @@ impl JvmThread {
 				if method.access_flags
 					!= ((MethodAccessFlags::Public as u16) | (MethodAccessFlags::Static as u16))
 				{
-					if self.debug {
-						println!("Main method is not public and static.");
-					}
-					assert!(false, "Main method is not public and static.");
+					FatalError::new(FatalErrorType::MainMethodNotPublicStatic).call();
 				}
-
+				if JvmType::Primitive(JvmPrimitiveType::Void)
+					!= method.get_return_type(class.get_constant_pool_ref())
+				{
+					println!("Main method is not void.");
+					FatalError::new(FatalErrorType::MainMethodNotVoid).call();
+				}
 				let mut frame = Frame::new();
 				frame.class = Some(Rc::clone(&class));
 				/*
@@ -133,11 +136,11 @@ impl JvmThread {
 						JvmTypeValue::Primitive(p) => match p.tipe {
 							JvmPrimitiveType::Void => {}
 							_ => {
-								assert!(false, "Main method returned a value!");
+								FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
 							}
 						},
 						_ => {
-							assert!(false, "Main method returned a value!");
+							FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
 						}
 					}
 				}

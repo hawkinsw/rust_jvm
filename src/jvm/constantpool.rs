@@ -138,12 +138,10 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					constants[i] = Constant::Integer(tag, bytes);
 				}
 				Some(ConstantTags::CONSTANT_Float) => {
-					print!("Float\n");
-					assert!(false);
+					assert!(false, "TODO: Parse a constant float");
 				}
 				Some(ConstantTags::CONSTANT_Long) => {
-					print!("Long\n");
-					assert!(false);
+					assert!(false, "TODO: Parse a constant long");
 				}
 				Some(ConstantTags::CONSTANT_Double) => {
 					print!("Double\n");
