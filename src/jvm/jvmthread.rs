@@ -31,9 +31,8 @@ use jvm::method::MethodAccessFlags;
 use jvm::methodarea::MethodArea;
 use jvm::opcodes::OperandCodes;
 use jvm::typevalues::JvmPrimitiveType;
-use jvm::typevalues::JvmPrimitiveTypeValue;
 use jvm::typevalues::JvmType;
-use jvm::typevalues::JvmTypeValue;
+use jvm::typevalues::JvmValue;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
@@ -48,7 +47,7 @@ pub struct JvmThread {
 
 enum OpcodeResult {
 	Incr(usize),
-	Value(JvmTypeValue),
+	Value(JvmValue),
 }
 
 impl JvmThread {
@@ -122,26 +121,15 @@ impl JvmThread {
 				 */
 				frame
 					.operand_stack
-					.push(JvmTypeValue::Primitive(JvmPrimitiveTypeValue::new(
-						JvmPrimitiveType::Boolean,
-						0,
-					)));
+					.push(JvmValue::Primitive(JvmPrimitiveType::Boolean, 0));
 
 				if self.debug {
 					println!("Frame: {}", frame);
 				}
 
 				if let Some(v) = self.execute_method(method, frame) {
-					match v {
-						JvmTypeValue::Primitive(p) => match p.tipe {
-							JvmPrimitiveType::Void => {}
-							_ => {
-								FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
-							}
-						},
-						_ => {
-							FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
-						}
+					if JvmValue::Primitive(JvmPrimitiveType::Void, 0) != v {
+						FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
 					}
 				}
 				return true;
@@ -150,7 +138,7 @@ impl JvmThread {
 		false
 	}
 
-	fn execute_method(&mut self, method: &Method, mut frame: Frame) -> Option<JvmTypeValue> {
+	fn execute_method(&mut self, method: &Method, mut frame: Frame) -> Option<JvmValue> {
 		let class = frame.class().unwrap();
 		if let Some(code) = method.get_code(class.get_constant_pool_ref()) {
 			let mut pc = 0;
@@ -261,16 +249,13 @@ impl JvmThread {
 				if self.debug {
 					println!("ireturn");
 				}
-				return OpcodeResult::Value((frame.operand_stack.pop().unwrap()));
+				return OpcodeResult::Value(frame.operand_stack.pop().unwrap());
 			}
 			Some(OperandCodes::OPCODE_return) => {
 				if self.debug {
 					println!("return");
 				}
-				return OpcodeResult::Value(JvmTypeValue::Primitive(JvmPrimitiveTypeValue::new(
-					JvmPrimitiveType::Void,
-					0,
-				)));
+				return OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0));
 			}
 			Some(OperandCodes::OPCODE_invokestatic) => {
 				if self.debug {
@@ -313,31 +298,28 @@ impl JvmThread {
 		frame: &mut Frame,
 		step: usize,
 	) -> usize {
-		if let Some(OpcodeResult::Value(v)) = result {
+		if let Some(OpcodeResult::Value(tv)) = result {
 			/*
 			 * Push the result of the invocation onto
 			 * the operand stack. Do not push anything
 			 * on to the stack if the return is Void.
 			 */
-			match v.clone() {
+			match tv.clone() {
 				/*
 				 * The JvmTypeValue::Primitive with tipe == JvmPrimitiveType::Void
 				 * is a sentinel value that indicates a return from a Void function.
 				 */
-				JvmTypeValue::Primitive(p) => {
-					match p.tipe {
-						JvmPrimitiveType::Void => {
-							if self.debug {
-								println!("Not pushing a void onto the caller's stack.");
-							}
+				JvmValue::Primitive(t, v) => {
+					if t == JvmPrimitiveType::Void {
+						if self.debug {
+							println!("Not pushing a void onto the caller's stack.");
 						}
+					} else {
 						/*
 						 * Any JvmTypeValue::Primitive other than a JvmPrimitive::Void
 						 * gets pushed on to the stack.
 						 */
-						_ => {
-							frame.operand_stack.push(v);
-						}
+						frame.operand_stack.push(tv);
 					}
 				}
 				/*
@@ -345,7 +327,7 @@ impl JvmThread {
 				 * on to the stack.
 				 */
 				_ => {
-					frame.operand_stack.push(v);
+					frame.operand_stack.push(tv);
 				}
 			}
 			return step;
@@ -354,14 +336,14 @@ impl JvmThread {
 	}
 
 	fn execute_iadd(&mut self, frame: &mut Frame) {
-		if let Some(JvmTypeValue::Primitive(op1_primitive)) = frame.operand_stack.pop() {
-			if let Some(JvmTypeValue::Primitive(op2_primitive)) = frame.operand_stack.pop() {
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op1)) = frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op2)) =
+				frame.operand_stack.pop()
+			{
 				frame
 					.operand_stack
-					.push(JvmTypeValue::Primitive(JvmPrimitiveTypeValue::new(
-						JvmPrimitiveType::Integer,
-						op1_primitive.value + op2_primitive.value,
-					)));
+					.push(JvmValue::Primitive(JvmPrimitiveType::Integer, op1 + op2));
 			}
 		}
 	}
@@ -373,10 +355,7 @@ impl JvmThread {
 	fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
 		frame
 			.operand_stack
-			.push(JvmTypeValue::Primitive(JvmPrimitiveTypeValue::new(
-				JvmPrimitiveType::Integer,
-				x,
-			)));
+			.push(JvmValue::Primitive(JvmPrimitiveType::Integer, x as u64));
 	}
 
 	fn execute_invokestatic(

@@ -34,87 +34,67 @@ pub enum JvmPrimitiveType {
 
 #[derive(Clone)]
 pub enum JvmReferenceType {
-	Array(Rc<JvmTypeValue>, u64),
+	Array(Rc<JvmValue>, u64),
 	Class(String),
 	Interface(String),
 }
 
 #[derive(Clone)]
-pub struct JvmPrimitiveTypeValue {
-	pub tipe: JvmPrimitiveType,
-	pub value: i64,
-}
-
-impl JvmPrimitiveTypeValue {
-	pub fn new(tipe: JvmPrimitiveType, value: i64) -> Self {
-		Self {
-			tipe: tipe,
-			value: value,
-		}
-	}
-}
-
-#[derive(Clone)]
-pub struct JvmReferenceTypeValue {
-	pub tipe: JvmReferenceType,
-	reference: u64,
-}
-
-impl JvmReferenceTypeValue {
-	pub fn new_array(dimension: u64, component_type: JvmTypeValue, reference: u64) -> Self {
-		JvmReferenceTypeValue {
-			tipe: JvmReferenceType::Array(Rc::new(component_type), dimension),
-			reference: reference,
-		}
-	}
-
-	pub fn new_class(name: String, reference: u64) -> Self {
-		JvmReferenceTypeValue {
-			tipe: JvmReferenceType::Class(name),
-			reference: reference,
-		}
-	}
-
-	pub fn new_interface(name: String, reference: u64) -> Self {
-		JvmReferenceTypeValue {
-			tipe: JvmReferenceType::Interface(name),
-			reference: reference,
-		}
-	}
-}
-
-impl fmt::Display for JvmPrimitiveTypeValue {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let type_name = match self.tipe {
-			JvmPrimitiveType::Boolean => "Boolean",
-			JvmPrimitiveType::Integer => "Integer",
-			JvmPrimitiveType::Void => "Void",
-			JvmPrimitiveType::Invalid => "Invalid",
-		};
-		write!(f, "{}: {}", type_name, self.value)
-	}
-}
-
-impl fmt::Display for JvmTypeValue {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			JvmTypeValue::Primitive(p) => return write!(f, "{}", p),
-			_ => (),
-		};
-		return write!(f, "Can't print references yet.");
-	}
-}
-
-#[derive(Clone)]
-pub enum JvmTypeValue {
-	Primitive(JvmPrimitiveTypeValue),
-	Reference(JvmReferenceTypeValue),
+pub enum JvmValue {
+	Primitive(JvmPrimitiveType, u64),
+	Reference(JvmReferenceType, u64),
 }
 
 #[derive(Clone)]
 pub enum JvmType {
 	Primitive(JvmPrimitiveType),
 	Reference(JvmReferenceType),
+}
+
+impl fmt::Display for JvmPrimitiveType {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			JvmPrimitiveType::Boolean => write!(f, "Boolean"),
+			JvmPrimitiveType::Integer => write!(f, "Integer"),
+			JvmPrimitiveType::Void => write!(f, "Void"),
+			JvmPrimitiveType::Invalid => write!(f, "Invalid"),
+		}
+	}
+}
+
+impl fmt::Display for JvmReferenceType {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			JvmReferenceType::Array(_, _) => write!(f, "Array"),
+			JvmReferenceType::Class(_) => write!(f, "Class"),
+			JvmReferenceType::Interface(_) => write!(f, "Interface"),
+		}
+	}
+}
+
+impl fmt::Display for JvmValue {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			JvmValue::Primitive(tipe, value) => return write!(f, "Value: {}: {}", tipe, value),
+			JvmValue::Reference(tipe, value) => return write!(f, "Reference: {}: {}", tipe, value),
+		}
+	}
+}
+
+impl fmt::Display for JvmType {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			JvmType::Primitive(p) => write!(f, "Primitive: {}", p),
+			JvmType::Reference(r) => write!(f, "Reference: {}", r),
+		}
+	}
+}
+
+impl PartialEq for JvmReferenceType {
+	fn eq(&self, other: &Self) -> bool {
+		assert!(false, "TODO: Implement PartialEq for JvmReferenceType");
+		false
+	}
 }
 
 impl PartialEq for JvmType {
@@ -132,16 +112,28 @@ impl PartialEq for JvmType {
 			},
 			JvmType::Reference(s) => match other {
 				JvmType::Reference(o) => {
-					/*
-					 * TODO: Compare two reference types
-					 */
-					assert!(false, "TODO: Compare two reference types.");
-					false
+					println!("Comparing two references.");
+					o == s
 				}
 				_ => {
 					println!("Comparing a reference with a non-reference.");
 					false
 				}
+			},
+		}
+	}
+}
+
+impl PartialEq for JvmValue {
+	fn eq(&self, other: &Self) -> bool {
+		match self {
+			JvmValue::Primitive(t, v) => match other {
+				JvmValue::Primitive(ot, ov) => ot == t && ov == v,
+				_ => false,
+			},
+			JvmValue::Reference(t, v) => match other {
+				JvmValue::Reference(ot, ov) => ot == t && ov == v,
+				_ => false,
 			},
 		}
 	}

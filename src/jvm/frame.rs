@@ -20,24 +20,23 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use jvm::class::Class;
-use jvm::constantpool::ConstantPool;
-use jvm::typevalues::JvmTypeValue;
+use jvm::typevalues::JvmValue;
 use std::fmt;
 use std::rc::Rc;
 
 #[derive(Clone, Default)]
 pub struct Frame {
-	pub operand_stack: Vec<JvmTypeValue>,
+	pub operand_stack: Vec<JvmValue>,
 	pub class: Option<Rc<Class>>,
-	pub locals: Vec<JvmTypeValue>,
+	pub locals: Vec<JvmValue>,
 }
 
 impl Frame {
 	pub fn new() -> Self {
 		Frame {
-			operand_stack: Vec::<JvmTypeValue>::new(),
+			operand_stack: Vec::<JvmValue>::new(),
 			class: None,
-			locals: Vec::<JvmTypeValue>::new(),
+			locals: Vec::<JvmValue>::new(),
 		}
 	}
 

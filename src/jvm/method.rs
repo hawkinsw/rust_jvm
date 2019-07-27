@@ -19,7 +19,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
-use jvm::attribute::codeattributes::CodeAttribute;
 use jvm::attribute::Attributes;
 use jvm::constant::Constant;
 use jvm::constant::Utf8Reserved;
