@@ -29,7 +29,7 @@ use jvm::frame::Frame;
 use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
 use jvm::methodarea::MethodArea;
-use jvm::opcodes::OperandCodes;
+use jvm::opcodes::OperandCode;
 use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmType;
 use jvm::typevalues::JvmValue;
@@ -167,97 +167,97 @@ impl JvmThread {
 		if self.debug {
 			print!("code: 0x{:X}\n", opcode);
 		}
-		match OperandCodes::from_u8(opcode) {
-			Some(OperandCodes::OPCODE_iconst_m1) => {
+		match OperandCode::from_u8(opcode) {
+			Some(OperandCode::Iconst_m1) => {
 				if self.debug {
 					println!("iconst_m1");
 				}
 				self.execute_iconst_x(-1, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iconst_0) => {
+			Some(OperandCode::Iconst_0) => {
 				if self.debug {
 					println!("iconst_0");
 				}
 				self.execute_iconst_x(0, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iconst_1) => {
+			Some(OperandCode::Iconst_1) => {
 				if self.debug {
 					println!("iconst_1");
 				}
 				self.execute_iconst_x(1, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iconst_2) => {
+			Some(OperandCode::Iconst_2) => {
 				if self.debug {
 					println!("iconst_2");
 				}
 				self.execute_iconst_x(2, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iconst_3) => {
+			Some(OperandCode::Iconst_3) => {
 				if self.debug {
 					println!("iconst_3");
 				}
 				self.execute_iconst_x(3, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iconst_4) => {
+			Some(OperandCode::Iconst_4) => {
 				if self.debug {
 					println!("iconst_4");
 				}
 				self.execute_iconst_x(4, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iconst_5) => {
+			Some(OperandCode::Iconst_5) => {
 				if self.debug {
 					println!("iconst_5");
 				}
 				self.execute_iconst_x(5, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iload_0) => {
+			Some(OperandCode::Iload_0) => {
 				if self.debug {
 					println!("iload_0");
 				}
 				self.execute_iload_x(0, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iload_1) => {
+			Some(OperandCode::Iload_1) => {
 				if self.debug {
 					println!("iload_1");
 				}
 				self.execute_iload_x(1, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iload_2) => {
+			Some(OperandCode::Iload_2) => {
 				if self.debug {
 					println!("iload_2");
 				}
 				self.execute_iload_x(2, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iload_3) => {
+			Some(OperandCode::Iload_3) => {
 				if self.debug {
 					println!("iload_3");
 				}
 				self.execute_iload_x(3, frame);
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_ireturn) => {
+			Some(OperandCode::Ireturn) => {
 				if self.debug {
 					println!("ireturn");
 				}
 				return OpcodeResult::Value(frame.operand_stack.pop().unwrap());
 			}
-			Some(OperandCodes::OPCODE_return) => {
+			Some(OperandCode::r#Return) => {
 				if self.debug {
 					println!("return");
 				}
 				return OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0));
 			}
-			Some(OperandCodes::OPCODE_invokestatic) => {
+			Some(OperandCode::Invokestatic) => {
 				if self.debug {
 					println!("invokestatic");
 				}
@@ -270,14 +270,14 @@ impl JvmThread {
 				let invokestatic_result = self.execute_invokestatic(bytes, frame);
 				pc_incr = self.handle_invoke_result(invokestatic_result, frame, 3);
 			}
-			Some(OperandCodes::OPCODE_pop) => {
+			Some(OperandCode::Pop) => {
 				if self.debug {
 					println!("pop");
 				}
 				frame.operand_stack.pop();
 				pc_incr = 1;
 			}
-			Some(OperandCodes::OPCODE_iadd) => {
+			Some(OperandCode::Iadd) => {
 				if self.debug {
 					println!("iadd");
 				}

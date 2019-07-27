@@ -28,23 +28,23 @@ use std::iter::repeat;
 use std::str;
 
 enum_from_primitive! {
-pub enum ConstantTags {
-	CONSTANT_Class = 7,
-	CONSTANT_Fieldref = 9,
-	CONSTANT_Methodref = 10,
-	CONSTANT_InterfaceMethodref = 11,
-	CONSTANT_String = 8,
-	CONSTANT_Integer= 3,
-	CONSTANT_Float= 4,
-	CONSTANT_Long= 5,
-	CONSTANT_Double = 6,
-	CONSTANT_NameAndType = 12,
-	CONSTANT_Utf8 = 1,
-	CONSTANT_MethodHandle= 15,
-	CONSTANT_MethodType = 16,
-	CONSTANT_InvokeDynamic = 18,
-	CONSTANT_Module = 19,
-	CONSTANT_Package = 20,
+pub enum ConstantTag {
+	Class = 7,
+	Fieldref = 9,
+	Methodref = 10,
+	InterfaceMethodref = 11,
+	String = 8,
+	Integer= 3,
+	Float= 4,
+	Long= 5,
+	Double = 6,
+	NameAndType = 12,
+	Utf8 = 1,
+	MethodHandle= 15,
+	MethodType = 16,
+	InvokeDynamic = 18,
+	Module = 19,
+	Package = 20,
 }}
 
 #[derive(Clone, Default)]
@@ -93,15 +93,15 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 				continue;
 			}
 
-			match ConstantTags::from_u8(bytes[offset]) {
-				Some(ConstantTags::CONSTANT_Class) => {
+			match ConstantTag::from_u8(bytes[offset]) {
+				Some(ConstantTag::Class) => {
 					let tag: u8 = bytes[offset];
 					let name_index: u16 =
 						(bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
 					offset += 3;
 					constants[i] = Constant::Class(tag, name_index);
 				}
-				Some(ConstantTags::CONSTANT_Fieldref) => {
+				Some(ConstantTag::Fieldref) => {
 					let tag: u8 = bytes[offset];
 					let index: u16 = (bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
 					let name_and_type_index: u16 =
@@ -109,7 +109,7 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					offset += 5;
 					constants[i] = Constant::Fieldref(tag, index, name_and_type_index);
 				}
-				Some(ConstantTags::CONSTANT_Methodref) => {
+				Some(ConstantTag::Methodref) => {
 					let tag: u8 = bytes[offset];
 					let index: u16 = (bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
 					let name_and_type_index: u16 =
@@ -117,17 +117,17 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					offset += 5;
 					constants[i] = Constant::Methodref(tag, index, name_and_type_index);
 				}
-				Some(ConstantTags::CONSTANT_InterfaceMethodref) => {
+				Some(ConstantTag::InterfaceMethodref) => {
 					print!("InterfaceMethodref\n");
 				}
-				Some(ConstantTags::CONSTANT_String) => {
+				Some(ConstantTag::String) => {
 					let tag: u8 = bytes[offset];
 					let string_index: u16 =
 						(bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
 					offset += 3;
 					constants[i] = Constant::String(tag, string_index);
 				}
-				Some(ConstantTags::CONSTANT_Integer) => {
+				Some(ConstantTag::Integer) => {
 					print!("Integer\n");
 					let tag: u8 = bytes[offset];
 					let bytes: u32 = (bytes[offset + 1] as u32) << 24
@@ -137,13 +137,13 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					offset += 5;
 					constants[i] = Constant::Integer(tag, bytes);
 				}
-				Some(ConstantTags::CONSTANT_Float) => {
+				Some(ConstantTag::Float) => {
 					assert!(false, "TODO: Parse a constant float");
 				}
-				Some(ConstantTags::CONSTANT_Long) => {
+				Some(ConstantTag::Long) => {
 					assert!(false, "TODO: Parse a constant long");
 				}
-				Some(ConstantTags::CONSTANT_Double) => {
+				Some(ConstantTag::Double) => {
 					print!("Double\n");
 					let tag: u8 = bytes[offset];
 					let bytes: u64 = (bytes[offset + 1] as u64) << 56
@@ -162,7 +162,7 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					 */
 					skip = true;
 				}
-				Some(ConstantTags::CONSTANT_NameAndType) => {
+				Some(ConstantTag::NameAndType) => {
 					let tag: u8 = bytes[offset];
 					let name_index: u16 =
 						(bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
@@ -171,7 +171,7 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					offset += 5;
 					constants[i] = Constant::NameAndType(tag, name_index, descriptor_index);
 				}
-				Some(ConstantTags::CONSTANT_Utf8) => {
+				Some(ConstantTag::Utf8) => {
 					let mut reserved: Utf8Reserved = Utf8Reserved::NotReserved;
 					let tag: u8 = bytes[offset];
 					let length: u16 = (bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
@@ -194,19 +194,19 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					offset += 1 + 2 + (length as usize);
 					constants[i] = Constant::Utf8(tag, reserved, length, value.to_string());
 				}
-				Some(ConstantTags::CONSTANT_MethodHandle) => {
+				Some(ConstantTag::MethodHandle) => {
 					print!("MethodHandle\n");
 				}
-				Some(ConstantTags::CONSTANT_MethodType) => {
+				Some(ConstantTag::MethodType) => {
 					print!("MethodType\n");
 				}
-				Some(ConstantTags::CONSTANT_InvokeDynamic) => {
+				Some(ConstantTag::InvokeDynamic) => {
 					print!("InvokeDynamic\n");
 				}
-				Some(ConstantTags::CONSTANT_Module) => {
+				Some(ConstantTag::Module) => {
 					print!("Module\n");
 				}
-				Some(ConstantTags::CONSTANT_Package) => {
+				Some(ConstantTag::Package) => {
 					print!("Package\n");
 				}
 				_ => {
