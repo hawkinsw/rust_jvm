@@ -24,6 +24,7 @@ mod attribute;
 mod class;
 mod constant;
 mod constantpool;
+pub mod debug;
 mod environment;
 mod error;
 mod exceptions;
@@ -35,17 +36,21 @@ mod methodarea;
 mod opcodes;
 mod typevalues;
 
+use jvm::debug::Debug;
+use jvm::debug::DebugLevel;
 use jvm::methodarea::MethodArea;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 pub struct Jvm {
-	debug: bool,
+	debug_level: DebugLevel,
 }
 
 impl Jvm {
-	pub fn new(debug: bool) -> Option<Jvm> {
-		Some(Jvm { debug: debug })
+	pub fn new(debug_level: DebugLevel) -> Option<Jvm> {
+		Some(Jvm {
+			debug_level: debug_level,
+		})
 	}
 
 	pub fn run(
@@ -59,23 +64,23 @@ impl Jvm {
 		 * Create a VM and start running!
 		 */
 		let env = environment::Environment::new(classpath, args);
-		let methodarea = Arc::new(Mutex::new(MethodArea::new(self.debug)));
-		let mut thread = jvmthread::JvmThread::new(self.debug, methodarea);
+		let methodarea = Arc::new(Mutex::new(MethodArea::new(self.debug_level.clone())));
+		let mut thread = jvmthread::JvmThread::new(self.debug_level.clone(), methodarea);
 		if thread.run(start_class, start_function, &env) {
-			if self.debug {
-				println!("Success running {}.{}", start_class, start_function);
-			}
+			Debug(
+				format!("Success running {}.{}", start_class, start_function),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
 			return true;
 		}
-		if self.debug {
-			println!("Failure running {}.{}", start_class, start_function);
-		}
+		eprintln!("Failure running {}.{}", start_class, start_function);
 		false
 	}
 }
 
 impl fmt::Display for Jvm {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "debug: {}\n", self.debug)
+		write!(f, "debug_level: {}\n", &self.debug_level)
 	}
 }

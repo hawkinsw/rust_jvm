@@ -24,8 +24,10 @@ extern crate enum_primitive;
 extern crate jvm;
 use clap::{App, Arg};
 
+use jvm::jvm::debug::DebugLevel;
+
 fn main() {
-	let mut debug: bool = false;
+	let mut debug = DebugLevel::Error;
 	/*
 	 * TODO: Update this so that we use a yaml file to
 	 * generate these options!
@@ -60,7 +62,7 @@ fn main() {
 		.get_matches();
 
 	if cli_matches.is_present("debug") {
-		debug = true;
+		debug = DebugLevel::Info;
 	}
 
 	let class = format!("{}", cli_matches.value_of("class").unwrap());
@@ -74,7 +76,7 @@ fn main() {
 		.unwrap_or(clap::Values::default())
 		.collect();
 
-	if let Some(jvm) = jvm::jvm::Jvm::new(debug) {
+	if let Some(jvm) = jvm::jvm::Jvm::new(DebugLevel::Info) {
 		jvm.run(&class, &method, &classpath, &args);
 	}
 }

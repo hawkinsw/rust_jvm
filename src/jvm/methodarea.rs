@@ -20,18 +20,19 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use jvm::class::Class;
+use jvm::debug::DebugLevel;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 pub struct MethodArea {
-	pub debug: bool,
+	pub debug_level: DebugLevel,
 	pub classes: HashMap<String, Rc<Class>>,
 }
 
 impl MethodArea {
-	pub fn new(debug: bool) -> Self {
+	pub fn new(debug_level: DebugLevel) -> Self {
 		MethodArea {
-			debug: debug,
+			debug_level: debug_level,
 			classes: HashMap::new(),
 		}
 	}

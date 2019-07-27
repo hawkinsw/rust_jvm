@@ -22,6 +22,8 @@
 use enum_primitive::FromPrimitive;
 use jvm::class::Class;
 use jvm::constant::Constant;
+use jvm::debug::Debug;
+use jvm::debug::DebugLevel;
 use jvm::environment::Environment;
 use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
@@ -40,7 +42,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 pub struct JvmThread {
-	debug: bool,
+	debug_level: DebugLevel,
 	methodarea: Arc<Mutex<MethodArea>>,
 	pc: usize,
 }
@@ -51,9 +53,9 @@ enum OpcodeResult {
 }
 
 impl JvmThread {
-	pub fn new(debug: bool, methodarea: Arc<Mutex<MethodArea>>) -> Self {
+	pub fn new(debug_level: DebugLevel, methodarea: Arc<Mutex<MethodArea>>) -> Self {
 		JvmThread {
-			debug: debug,
+			debug_level: debug_level,
 			methodarea: methodarea,
 			pc: 0,
 		}
@@ -81,9 +83,11 @@ impl JvmThread {
 						if let Some(class_filename) = class_entry.path().to_str() {
 							let class_filename = class_filename.to_string();
 							if class_filename.ends_with("class") {
-								if self.debug {
-									println!("Loading class file {}", class_filename);
-								}
+								Debug(
+									format!("Loading class file {}", class_filename),
+									&self.debug_level,
+									DebugLevel::Info,
+								);
 								if let Ok(mut methodarea) = self.methodarea.lock() {
 									(*methodarea).load_class_from_file(&class_filename);
 								}
@@ -99,9 +103,11 @@ impl JvmThread {
 			class_or = (*methodarea).get_class_rc(class_name);
 		}
 		if let Some(class) = class_or {
-			if self.debug {
-				println!("Loaded class {}.\n", class);
-			}
+			Debug(
+				format!("Loaded class {}.\n", class),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
 			if let Some(method) = class.get_method_ref_by_name(method_name) {
 				if method.access_flags
 					!= ((MethodAccessFlags::Public as u16) | (MethodAccessFlags::Static as u16))
@@ -123,9 +129,11 @@ impl JvmThread {
 					.operand_stack
 					.push(JvmValue::Primitive(JvmPrimitiveType::Boolean, 0));
 
-				if self.debug {
-					println!("Frame: {}", frame);
-				}
+				Debug(
+					format!("Frame: {}", frame),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
 
 				if let Some(v) = self.execute_method(method, frame) {
 					if JvmValue::Primitive(JvmPrimitiveType::Void, 0) != v {
@@ -144,9 +152,11 @@ impl JvmThread {
 			let mut pc = 0;
 			while {
 				let mut pc_incr = 0;
-				if self.debug {
-					print!("Doing next opcode\n");
-				}
+				Debug(
+					format!("Doing next opcode\n"),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
 				match self.execute_opcode(&code[pc..], &mut frame) {
 					OpcodeResult::Incr(incr) => pc_incr = incr,
 					OpcodeResult::Value(v) => return Some(v),
@@ -164,104 +174,77 @@ impl JvmThread {
 		let constant_pool = class.get_constant_pool_ref();
 
 		let opcode = bytes[0];
-		if self.debug {
-			print!("code: 0x{:X}\n", opcode);
-		}
+		Debug(
+			format!("code: 0x{:X}\n", opcode),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
 		match OperandCode::from_u8(opcode) {
 			Some(OperandCode::Iconst_m1) => {
-				if self.debug {
-					println!("iconst_m1");
-				}
+				Debug(format!("iconst_m1"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(-1, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iconst_0) => {
-				if self.debug {
-					println!("iconst_0");
-				}
+				Debug(format!("iconst_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(0, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iconst_1) => {
-				if self.debug {
-					println!("iconst_1");
-				}
+				Debug(format!("iconst_1"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(1, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iconst_2) => {
-				if self.debug {
-					println!("iconst_2");
-				}
+				Debug(format!("iconst_2"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(2, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iconst_3) => {
-				if self.debug {
-					println!("iconst_3");
-				}
+				Debug(format!("iconst_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(3, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iconst_4) => {
-				if self.debug {
-					println!("iconst_4");
-				}
+				Debug(format!("iconst_4"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(4, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iconst_5) => {
-				if self.debug {
-					println!("iconst_5");
-				}
+				Debug(format!("iconst_5"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(5, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iload_0) => {
-				if self.debug {
-					println!("iload_0");
-				}
+				Debug(format!("iload_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(0, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iload_1) => {
-				if self.debug {
-					println!("iload_1");
-				}
+				Debug(format!("iload_1"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(1, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iload_2) => {
-				if self.debug {
-					println!("iload_2");
-				}
+				Debug(format!("iload_2"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(2, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iload_3) => {
-				if self.debug {
-					println!("iload_3");
-				}
+				Debug(format!("iload_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(3, frame);
 				pc_incr = 1;
 			}
 			Some(OperandCode::Ireturn) => {
-				if self.debug {
-					println!("ireturn");
-				}
+				Debug(format!("ireturn"), &self.debug_level, DebugLevel::Info);
 				return OpcodeResult::Value(frame.operand_stack.pop().unwrap());
 			}
 			Some(OperandCode::r#Return) => {
-				if self.debug {
-					println!("return");
-				}
+				Debug(format!("return"), &self.debug_level, DebugLevel::Info);
 				return OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0));
 			}
 			Some(OperandCode::Invokestatic) => {
-				if self.debug {
-					println!("invokestatic");
-				}
-
+				Debug(format!("invokestatic"), &self.debug_level, DebugLevel::Info);
 				/*
 				 * Start by assuming failure.
 				 */
@@ -271,16 +254,12 @@ impl JvmThread {
 				pc_incr = self.handle_invoke_result(invokestatic_result, frame, 3);
 			}
 			Some(OperandCode::Pop) => {
-				if self.debug {
-					println!("pop");
-				}
+				Debug(format!("pop"), &self.debug_level, DebugLevel::Info);
 				frame.operand_stack.pop();
 				pc_incr = 1;
 			}
 			Some(OperandCode::Iadd) => {
-				if self.debug {
-					println!("iadd");
-				}
+				Debug(format!("iadd"), &self.debug_level, DebugLevel::Info);
 				self.execute_iadd(frame);
 				pc_incr = 1;
 			}
@@ -311,9 +290,11 @@ impl JvmThread {
 				 */
 				JvmValue::Primitive(t, v) => {
 					if t == JvmPrimitiveType::Void {
-						if self.debug {
-							println!("Not pushing a void onto the caller's stack.");
-						}
+						Debug(
+							format!("Not pushing a void onto the caller's stack."),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
 					} else {
 						/*
 						 * Any JvmTypeValue::Primitive other than a JvmPrimitive::Void
@@ -381,9 +362,11 @@ impl JvmThread {
 							if let Constant::Utf8(_, _, _, method_name) =
 								constant_pool.get_constant_ref(*method_name_index as usize)
 							{
-								if self.debug {
-									println!("Invoke Static: {}.{}", class_name, method_name);
-								}
+								Debug(
+									format!("Invoke Static: {}.{}", class_name, method_name),
+									&self.debug_level,
+									DebugLevel::Info,
+								);
 								/*
 								 * Steps:
 								 * 1. Get the class containing the method.
@@ -402,9 +385,11 @@ impl JvmThread {
 											method_name,
 											invoked_class.get_constant_pool_ref(),
 										) {
-										if self.debug {
-											println!("method: {}", method);
-										}
+										Debug(
+											format!("method: {}", method),
+											&self.debug_level,
+											DebugLevel::Info,
+										);
 
 										let mut invoked_frame = Frame::new();
 										invoked_frame.class = Some(Rc::clone(&invoked_class));
@@ -428,11 +413,16 @@ impl JvmThread {
 												  method_name);
 											}
 										}
-
-										if self.debug {
-											println!("Parameter count: {}", parameter_count);
-											println!("invoked_frame: {}", invoked_frame);
-										}
+										Debug(
+											format!("Parameter count: {}", parameter_count),
+											&self.debug_level,
+											DebugLevel::Info,
+										);
+										Debug(
+											format!("invoked_frame: {}", invoked_frame),
+											&self.debug_level,
+											DebugLevel::Info,
+										);
 
 										if let Some(v) = self.execute_method(&method, invoked_frame)
 										{
