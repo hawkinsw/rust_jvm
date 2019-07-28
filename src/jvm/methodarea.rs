@@ -20,13 +20,39 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use jvm::class::Class;
+use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::LockResult;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
+
+pub struct LoadedClass {
+	initialized: bool,
+	pub class: Rc<Class>,
+}
+
+
+impl LoadedClass {
+	fn new(class: Class) -> Self {
+		LoadedClass {
+			class: Rc::new(class),
+			initialized: false,
+		}
+	}
+	pub fn is_initialized(&self) -> bool {
+		self.initialized
+	}
+	pub fn initialize(&mut self) {
+		self.initialized = true;
+	}
+}
 
 pub struct MethodArea {
-	pub debug_level: DebugLevel,
-	pub classes: HashMap<String, Rc<Class>>,
+	debug_level: DebugLevel,
+	classes: HashMap<String, Arc<Mutex<LoadedClass>>>,
 }
 
 impl MethodArea {
@@ -42,8 +68,23 @@ impl MethodArea {
 	}
 
 	pub fn get_class_rc(&self, class_name: &String) -> Option<Rc<Class>> {
-		if let Some(class_rc_ref) = self.classes.get(class_name) {
-			Some(Rc::clone(class_rc_ref))
+		if let Some(loaded_class) = self.classes.get(class_name) {
+			let mut result: Option<Rc<Class>> = None;
+			if let Ok(loaded_class) = loaded_class.lock() {
+				result = Some(Rc::clone(&(loaded_class.class)));
+			}
+			result
+		} else {
+			None
+		}
+	}
+
+	pub fn get_loaded_class(
+		&self,
+		class_name: &String,
+	) -> Option<Arc<Mutex<LoadedClass>>> {
+		if let Some(loaded_class) = self.classes.get(class_name) {
+			Some(Arc::clone(loaded_class))
 		} else {
 			None
 		}
@@ -52,8 +93,23 @@ impl MethodArea {
 	pub fn load_class_from_file(&mut self, class_filename: &String) -> Option<Rc<Class>> {
 		if let Some(class) = Class::load(class_filename) {
 			if let Some(class_name) = class.get_class_name() {
-				self.classes.insert(class_name.to_string(), Rc::new(class));
-				return Some(Rc::clone(self.classes.get(&class_name).unwrap()));
+				if let Some(_) = self.classes.insert(
+					class_name.to_string(),
+					Arc::new(Mutex::new(LoadedClass::new(class))),
+				) {
+					/*
+					 * This is a fatal error -- loading the same class twice!
+					 */
+				}
+				/*
+				 * loaded_class is an Arc
+				 */
+				let loaded_class = self.classes.get(&class_name).unwrap();
+				let mut result: Option<Rc<Class>> = None;
+				if let Ok(loaded_class) = loaded_class.lock() {
+					result = Some(Rc::clone(&loaded_class.class));
+				}
+				return result;
 			}
 		}
 		None

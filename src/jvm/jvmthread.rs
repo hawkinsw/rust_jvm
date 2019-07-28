@@ -30,6 +30,7 @@ use jvm::error::FatalErrorType;
 use jvm::frame::Frame;
 use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
+use jvm::methodarea::LoadedClass;
 use jvm::methodarea::MethodArea;
 use jvm::opcodes::OperandCode;
 use jvm::typevalues::JvmPrimitiveType;
@@ -39,7 +40,9 @@ use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::LockResult;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
 
 pub struct JvmThread {
 	debug_level: DebugLevel,
@@ -356,14 +359,17 @@ impl JvmThread {
 					if let Constant::NameAndType(_, method_name_index, _) =
 						constant_pool.get_constant_ref(*method_index as usize)
 					{
-						if let Constant::Utf8(_, _, _, class_name) =
+						if let Constant::Utf8(_, _, _, invoked_class_name) =
 							constant_pool.get_constant_ref(*class_name_index as usize)
 						{
 							if let Constant::Utf8(_, _, _, method_name) =
 								constant_pool.get_constant_ref(*method_name_index as usize)
 							{
 								Debug(
-									format!("Invoke Static: {}.{}", class_name, method_name),
+									format!(
+										"Invoke Static: {}.{}",
+										invoked_class_name, method_name
+									),
 									&self.debug_level,
 									DebugLevel::Info,
 								);
@@ -375,11 +381,11 @@ impl JvmThread {
 								 * 4. Populate the frame.
 								 * 5. Execute the method
 								 */
-								let mut invoked_class_or: Option<Rc<Class>> = None;
+								let mut invoked_class: Option<Rc<Class>> = None;
 								if let Ok(mut methodarea) = self.methodarea.lock() {
-									invoked_class_or = (*methodarea).get_class_rc(class_name);
+									invoked_class = (*methodarea).get_class_rc(invoked_class_name);
 								}
-								if let Some(invoked_class) = invoked_class_or {
+								if let Some(invoked_class) = invoked_class {
 									if let Some(method) =
 										invoked_class.get_methods_ref().get_by_name(
 											method_name,
@@ -390,6 +396,75 @@ impl JvmThread {
 											&self.debug_level,
 											DebugLevel::Info,
 										);
+
+										/*
+										 * Check to see if we need to initialize the class
+										 * before invoking a method on it.
+										 *
+										 * To do that, we have to lock the method area to make
+										 * sure that the class doesn't go away from underneath
+										 * us. Then, we need to get exclusive access to the
+										 * class itself. Once we have that, we can initialize
+										 * the class!
+										 */
+										let mut invoked_loaded_class: Option<
+											Arc<Mutex<LoadedClass>>> = None;
+										if let Ok(methodarea) = self.methodarea.lock() {
+											invoked_loaded_class =
+												(*methodarea).get_loaded_class(invoked_class_name);
+										}
+
+										if let Some(invoked_loaded_class) = invoked_loaded_class {
+											if let Ok(mut invoked_loaded_class) =
+												invoked_loaded_class.lock()
+											{
+												if !(*invoked_loaded_class).is_initialized() {
+													(*invoked_loaded_class).initialize();
+												}
+
+												let clinit: String = "<clinit>".into();
+
+												/*
+												 * We must invoke the clinit method, if one exists.
+												 */
+												if let Some(clinit_method) =
+													invoked_class.get_methods_ref().get_by_name(
+														&clinit,
+														invoked_class.get_constant_pool_ref(),
+													) {
+													Debug(
+														format!("clinit Method: {}", clinit_method),
+														&self.debug_level,
+														DebugLevel::Info,
+													);
+
+													let mut clinit_frame = Frame::new();
+													clinit_frame.class =
+														Some(Rc::clone(&invoked_class));
+
+													Debug(
+														format!("clinit Frame: {}", clinit_frame),
+														&self.debug_level,
+														DebugLevel::Info,
+													);
+
+													if let Some(v) = self
+														.execute_method(clinit_method, clinit_frame)
+													{
+														if JvmValue::Primitive(
+															JvmPrimitiveType::Void,
+															0,
+														) != v
+														{
+															FatalError::new(
+															FatalErrorType::ClassInitMethodReturnedValue,
+														)
+														.call();
+														}
+													}
+												}
+											}
+										}
 
 										let mut invoked_frame = Frame::new();
 										invoked_frame.class = Some(Rc::clone(&invoked_class));
@@ -409,7 +484,7 @@ impl JvmThread {
 											} else {
 												assert!(false,
 												  "Not enough parameters on the stack to call {}.{}.",
-												  class_name,
+												  invoked_class_name,
 												  method_name);
 											}
 										}
@@ -432,7 +507,7 @@ impl JvmThread {
 									}
 								} else {
 									FatalError::new(FatalErrorType::ClassNotLoaded(
-										class_name.clone(),
+										invoked_class_name.clone(),
 									))
 									.call()
 								}

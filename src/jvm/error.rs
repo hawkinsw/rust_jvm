@@ -7,6 +7,7 @@ pub enum FatalErrorType {
 	InvalidFieldType,
 	InvalidMethodDescriptor,
 	VoidMethodReturnedValue,
+	ClassInitMethodReturnedValue,
 }
 
 impl fmt::Display for FatalErrorType {
@@ -19,6 +20,7 @@ impl fmt::Display for FatalErrorType {
 				write!(f, "Main method is not public or not static.")
 			}
 			FatalErrorType::MainMethodNotVoid => write!(f, "Main method is not void."),
+			FatalErrorType::ClassInitMethodReturnedValue => write!(f, "Class initialization method returned a value."),
 			FatalErrorType::InvalidFieldType => write!(f, "Main method is not void."),
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
