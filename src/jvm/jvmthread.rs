@@ -144,7 +144,15 @@ impl JvmThread {
 					}
 				}
 				return true;
+			} else {
+				FatalError::new(FatalErrorType::MethodNotFound(
+					method_name.clone(),
+					class_name.clone(),
+				))
+				.call()
 			}
+		} else {
+			FatalError::new(FatalErrorType::ClassNotFound(class_name.clone())).call()
 		}
 		false
 	}
@@ -506,7 +514,7 @@ impl JvmThread {
 										}
 									}
 								} else {
-									FatalError::new(FatalErrorType::ClassNotLoaded(
+									FatalError::new(FatalErrorType::ClassNotFound(
 										invoked_class_name.clone(),
 									))
 									.call()
