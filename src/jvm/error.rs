@@ -1,7 +1,9 @@
 use std::fmt;
 
 pub enum FatalErrorType {
-	ClassNotLoaded(String),
+	ClassNotFound(String),
+	MethodNotFound(String, String),
+	CouldNotLock(String, String),
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
 	InvalidFieldType,
@@ -13,14 +15,24 @@ pub enum FatalErrorType {
 impl fmt::Display for FatalErrorType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			FatalErrorType::ClassNotLoaded(s) => {
-				write!(f, "Class {} is required, but couldn't be found.", s)
+			FatalErrorType::ClassNotFound(c) => {
+				write!(f, "Class {} is required, but couldn't be found.", c)
+			}
+			FatalErrorType::MethodNotFound(m, c) => write!(
+				f,
+				"Method {} in {} is required, but couldn't be found.",
+				m, c
+			),
+			FatalErrorType::CouldNotLock(what, r#where) => {
+				write!(f, "Could not lock {} at {}.", what, r#where)
 			}
 			FatalErrorType::MainMethodNotPublicStatic => {
 				write!(f, "Main method is not public or not static.")
 			}
 			FatalErrorType::MainMethodNotVoid => write!(f, "Main method is not void."),
-			FatalErrorType::ClassInitMethodReturnedValue => write!(f, "Class initialization method returned a value."),
+			FatalErrorType::ClassInitMethodReturnedValue => {
+				write!(f, "Class initialization method returned a value.")
+			}
 			FatalErrorType::InvalidFieldType => write!(f, "Main method is not void."),
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
