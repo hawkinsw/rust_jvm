@@ -34,7 +34,6 @@ pub struct LoadedClass {
 	pub class: Rc<Class>,
 }
 
-
 impl LoadedClass {
 	fn new(class: Class) -> Self {
 		LoadedClass {
@@ -79,10 +78,7 @@ impl MethodArea {
 		}
 	}
 
-	pub fn get_loaded_class(
-		&self,
-		class_name: &String,
-	) -> Option<Arc<Mutex<LoadedClass>>> {
+	pub fn get_loaded_class(&self, class_name: &String) -> Option<Arc<Mutex<LoadedClass>>> {
 		if let Some(loaded_class) = self.classes.get(class_name) {
 			Some(Arc::clone(loaded_class))
 		} else {

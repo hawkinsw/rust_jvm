@@ -101,30 +101,36 @@ impl JvmThread {
 			}
 		}
 
-		let mut class_or: Option<Rc<Class>> = None;
+		let mut main_class: Option<Rc<Class>> = None;
 		if let Ok(methodarea) = self.methodarea.lock() {
-			class_or = (*methodarea).get_class_rc(class_name);
+			main_class = (*methodarea).get_class_rc(class_name);
 		}
-		if let Some(class) = class_or {
+		if let Some(main_class) = main_class {
 			Debug(
-				format!("Loaded class {}.\n", class),
+				format!("Loaded class {}.\n", main_class),
 				&self.debug_level,
 				DebugLevel::Info,
 			);
-			if let Some(method) = class.get_method_ref_by_name(method_name) {
-				if method.access_flags
+
+			/*
+			 * Per the spec, it is required that we initialize the main
+			 * class before calling the main method inside that class.
+			 */
+			self.execute_clinit(&main_class, class_name);
+
+			if let Some(main_method) = main_class.get_method_ref_by_name(method_name) {
+				if main_method.access_flags
 					!= ((MethodAccessFlags::Public as u16) | (MethodAccessFlags::Static as u16))
 				{
 					FatalError::new(FatalErrorType::MainMethodNotPublicStatic).call();
 				}
 				if JvmType::Primitive(JvmPrimitiveType::Void)
-					!= method.get_return_type(class.get_constant_pool_ref())
+					!= main_method.get_return_type(main_class.get_constant_pool_ref())
 				{
-					println!("Main method is not void.");
 					FatalError::new(FatalErrorType::MainMethodNotVoid).call();
 				}
 				let mut frame = Frame::new();
-				frame.class = Some(Rc::clone(&class));
+				frame.class = Some(Rc::clone(&main_class));
 				/*
 				 * Load up the frame's stack with the CLI arguments.
 				 */
@@ -138,7 +144,7 @@ impl JvmThread {
 					DebugLevel::Info,
 				);
 
-				if let Some(v) = self.execute_method(method, frame) {
+				if let Some(v) = self.execute_method(main_method, frame) {
 					if JvmValue::Primitive(JvmPrimitiveType::Void, 0) != v {
 						FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
 					}
@@ -350,6 +356,74 @@ impl JvmThread {
 			.push(JvmValue::Primitive(JvmPrimitiveType::Integer, x as u64));
 	}
 
+	fn execute_clinit(&mut self, class: &Rc<Class>, class_name: &String) {
+		/*
+		 * Check to see if we need to initialize the class
+		 * before invoking a method on it.
+		 *
+		 * To do that, we have to lock the method area to make
+		 * sure that the class doesn't go away from underneath
+		 * us. Then, we need to get exclusive access to the
+		 * class itself. Once we have that, we can initialize
+		 * the class!
+		 */
+		let mut loaded_class: Option<Arc<Mutex<LoadedClass>>> = None;
+		if let Ok(methodarea) = self.methodarea.lock() {
+			loaded_class = (*methodarea).get_loaded_class(class_name);
+		} else {
+			FatalError::new(FatalErrorType::CouldNotLock(
+				"Method Area.".to_string(),
+				"execute_clinit".to_string(),
+			))
+			.call();
+		}
+
+		if let Some(loaded_class) = loaded_class {
+			if let Ok(mut loaded_class) = loaded_class.lock() {
+				if !(*loaded_class).is_initialized() {
+					(*loaded_class).initialize();
+				}
+
+				let clinit: String = "<clinit>".into();
+
+				/*
+				 * We must invoke the clinit method, if one exists.
+				 */
+				if let Some(clinit_method) = class
+					.get_methods_ref()
+					.get_by_name(&clinit, class.get_constant_pool_ref())
+				{
+					Debug(
+						format!("clinit Method: {}", clinit_method),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+
+					let mut clinit_frame = Frame::new();
+					clinit_frame.class = Some(Rc::clone(&class));
+
+					Debug(
+						format!("clinit Frame: {}", clinit_frame),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+
+					if let Some(v) = self.execute_method(clinit_method, clinit_frame) {
+						if JvmValue::Primitive(JvmPrimitiveType::Void, 0) != v {
+							FatalError::new(FatalErrorType::ClassInitMethodReturnedValue).call();
+						}
+					}
+				}
+			} else {
+				FatalError::new(FatalErrorType::CouldNotLock(
+					class_name.to_string(),
+					"execute_clinit".to_string(),
+				))
+				.call();
+			}
+		}
+	}
+
 	fn execute_invokestatic(
 		&mut self,
 		bytes: &[u8],
@@ -406,73 +480,10 @@ impl JvmThread {
 										);
 
 										/*
-										 * Check to see if we need to initialize the class
-										 * before invoking a method on it.
-										 *
-										 * To do that, we have to lock the method area to make
-										 * sure that the class doesn't go away from underneath
-										 * us. Then, we need to get exclusive access to the
-										 * class itself. Once we have that, we can initialize
-										 * the class!
+										 * This is an operation that requires the target class
+										 * be initialized.
 										 */
-										let mut invoked_loaded_class: Option<
-											Arc<Mutex<LoadedClass>>> = None;
-										if let Ok(methodarea) = self.methodarea.lock() {
-											invoked_loaded_class =
-												(*methodarea).get_loaded_class(invoked_class_name);
-										}
-
-										if let Some(invoked_loaded_class) = invoked_loaded_class {
-											if let Ok(mut invoked_loaded_class) =
-												invoked_loaded_class.lock()
-											{
-												if !(*invoked_loaded_class).is_initialized() {
-													(*invoked_loaded_class).initialize();
-												}
-
-												let clinit: String = "<clinit>".into();
-
-												/*
-												 * We must invoke the clinit method, if one exists.
-												 */
-												if let Some(clinit_method) =
-													invoked_class.get_methods_ref().get_by_name(
-														&clinit,
-														invoked_class.get_constant_pool_ref(),
-													) {
-													Debug(
-														format!("clinit Method: {}", clinit_method),
-														&self.debug_level,
-														DebugLevel::Info,
-													);
-
-													let mut clinit_frame = Frame::new();
-													clinit_frame.class =
-														Some(Rc::clone(&invoked_class));
-
-													Debug(
-														format!("clinit Frame: {}", clinit_frame),
-														&self.debug_level,
-														DebugLevel::Info,
-													);
-
-													if let Some(v) = self
-														.execute_method(clinit_method, clinit_frame)
-													{
-														if JvmValue::Primitive(
-															JvmPrimitiveType::Void,
-															0,
-														) != v
-														{
-															FatalError::new(
-															FatalErrorType::ClassInitMethodReturnedValue,
-														)
-														.call();
-														}
-													}
-												}
-											}
-										}
+										self.execute_clinit(&invoked_class, invoked_class_name);
 
 										let mut invoked_frame = Frame::new();
 										invoked_frame.class = Some(Rc::clone(&invoked_class));
@@ -496,6 +507,7 @@ impl JvmThread {
 												  method_name);
 											}
 										}
+
 										Debug(
 											format!("Parameter count: {}", parameter_count),
 											&self.debug_level,
@@ -509,7 +521,14 @@ impl JvmThread {
 
 										if let Some(v) = self.execute_method(&method, invoked_frame)
 										{
-											println!("Returning from a method: {}!", v);
+											Debug(
+												format!(
+													"Returning from a method{}",
+													method.clone()
+												),
+												&self.debug_level,
+												DebugLevel::Info,
+											);
 											return Some(OpcodeResult::Value(v));
 										}
 									}
