@@ -42,7 +42,7 @@ impl fmt::Display for DebugLevel {
 }
 
 pub fn Debug<I: Display>(message: I, output_level: &DebugLevel, filter_level: DebugLevel) {
-	if *output_level >= filter_level {
+	if filter_level >= *output_level {
 		eprintln!("{}", message);
 	}
 }

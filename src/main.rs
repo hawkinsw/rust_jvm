@@ -76,7 +76,7 @@ fn main() {
 		.unwrap_or(clap::Values::default())
 		.collect();
 
-	if let Some(jvm) = jvm::jvm::Jvm::new(DebugLevel::Info) {
+	if let Some(jvm) = jvm::jvm::Jvm::new(debug) {
 		jvm.run(&class, &method, &classpath, &args);
 	}
 }
