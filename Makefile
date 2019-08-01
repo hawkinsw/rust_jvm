@@ -9,3 +9,6 @@ test-debug: all
 
 test-debug-debug: all
 	gdb --args ./target/debug/jvm -d -c ./java_test/ Hello main
+
+clean:
+	cargo clean
