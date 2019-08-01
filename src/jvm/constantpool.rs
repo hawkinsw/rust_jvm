@@ -118,7 +118,7 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					constants[i] = Constant::Methodref(tag, index, name_and_type_index);
 				}
 				Some(ConstantTag::InterfaceMethodref) => {
-					print!("InterfaceMethodref\n");
+					assert!(false, "TODO: Parse an interface method ref.");
 				}
 				Some(ConstantTag::String) => {
 					let tag: u8 = bytes[offset];
@@ -144,7 +144,6 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					assert!(false, "TODO: Parse a constant long");
 				}
 				Some(ConstantTag::Double) => {
-					print!("Double\n");
 					let tag: u8 = bytes[offset];
 					let bytes: u64 = (bytes[offset + 1] as u64) << 56
 						| (bytes[offset + 2] as u64) << 48
@@ -195,19 +194,19 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					constants[i] = Constant::Utf8(tag, reserved, length, value.to_string());
 				}
 				Some(ConstantTag::MethodHandle) => {
-					print!("MethodHandle\n");
+					assert!(false, "TODO: Parse a method handle");
 				}
 				Some(ConstantTag::MethodType) => {
-					print!("MethodType\n");
+					assert!(false, "TODO: Parse a method type");
 				}
 				Some(ConstantTag::InvokeDynamic) => {
-					print!("InvokeDynamic\n");
+					assert!(false, "TODO: Parse a invoke dynamic");
 				}
 				Some(ConstantTag::Module) => {
-					print!("Module\n");
+					assert!(false, "TODO: Parse a module");
 				}
 				Some(ConstantTag::Package) => {
-					print!("Package\n");
+					assert!(false, "TODO: Parse a package");
 				}
 				_ => {
 					print!("oops: unhandled constant pool tag.\n");
