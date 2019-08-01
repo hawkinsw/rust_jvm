@@ -37,6 +37,7 @@ enum_from_primitive! {
 		Ireturn = 0xac,
 		r#Return = 0xb1,
 		Invokestatic = 0xb8,
+		New = 0xbb,
 		Pop = 0x57,
 		Iadd = 0x60,
 	}

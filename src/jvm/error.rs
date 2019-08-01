@@ -4,10 +4,12 @@ pub enum FatalErrorType {
 	ClassNotFound(String),
 	MethodNotFound(String, String),
 	CouldNotLock(String, String),
+	ClassNotLoaded(String),
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
 	InvalidFieldType,
 	InvalidMethodDescriptor,
+	InvalidConstantReference(String, String, u16),
 	VoidMethodReturnedValue,
 	ClassInitMethodReturnedValue,
 }
@@ -26,6 +28,9 @@ impl fmt::Display for FatalErrorType {
 			FatalErrorType::CouldNotLock(what, r#where) => {
 				write!(f, "Could not lock {} at {}.", what, r#where)
 			}
+			FatalErrorType::ClassNotLoaded(class) => {
+				write!(f, "Class {} instantiated but not loaded.", class)
+			}
 			FatalErrorType::MainMethodNotPublicStatic => {
 				write!(f, "Main method is not public or not static.")
 			}
@@ -33,6 +38,11 @@ impl fmt::Display for FatalErrorType {
 			FatalErrorType::ClassInitMethodReturnedValue => {
 				write!(f, "Class initialization method returned a value.")
 			}
+			FatalErrorType::InvalidConstantReference(class, expected, index) => write!(
+				f,
+				"Invalid reference {} into Class {}'s constant pool; expected {}.",
+				index, class, expected
+			),
 			FatalErrorType::InvalidFieldType => write!(f, "Main method is not void."),
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}

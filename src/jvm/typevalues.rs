@@ -19,8 +19,11 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
+use jvm::class::Class;
+use jvm::constantpool::ConstantPool;
 use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
+use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -32,10 +35,21 @@ pub enum JvmPrimitiveType {
 	Invalid,
 }
 
+impl fmt::Display for JvmPrimitiveType {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			JvmPrimitiveType::Boolean => write!(f, "Boolean"),
+			JvmPrimitiveType::Integer => write!(f, "Integer"),
+			JvmPrimitiveType::Void => write!(f, "Void"),
+			JvmPrimitiveType::Invalid => write!(f, "Invalid"),
+		}
+	}
+}
+
 #[derive(Clone)]
 pub enum JvmReferenceType {
 	Array(Rc<JvmValue>, u64),
-	Class(String),
+	Class(Rc<Class>),
 	Interface(String),
 }
 
@@ -50,18 +64,6 @@ pub enum JvmType {
 	Primitive(JvmPrimitiveType),
 	Reference(JvmReferenceType),
 }
-
-impl fmt::Display for JvmPrimitiveType {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			JvmPrimitiveType::Boolean => write!(f, "Boolean"),
-			JvmPrimitiveType::Integer => write!(f, "Integer"),
-			JvmPrimitiveType::Void => write!(f, "Void"),
-			JvmPrimitiveType::Invalid => write!(f, "Invalid"),
-		}
-	}
-}
-
 impl fmt::Display for JvmReferenceType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {

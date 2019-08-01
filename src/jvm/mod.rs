@@ -33,6 +33,7 @@ mod frame;
 mod jvmthread;
 mod method;
 mod methodarea;
+mod object;
 mod opcodes;
 mod typevalues;
 

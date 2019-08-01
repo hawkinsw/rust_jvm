@@ -32,6 +32,7 @@ use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
 use jvm::methodarea::LoadedClass;
 use jvm::methodarea::MethodArea;
+use jvm::object::JvmObject;
 use jvm::opcodes::OperandCode;
 use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmType;
@@ -270,6 +271,11 @@ impl JvmThread {
 				let invokestatic_result = self.execute_invokestatic(bytes, frame);
 				pc_incr = self.handle_invoke_result(invokestatic_result, frame, 3);
 			}
+			Some(OperandCode::New) => {
+				Debug(format!("New"), &self.debug_level, DebugLevel::Info);
+				let new_result = self.execute_new(bytes, frame);
+				pc_incr = 3;
+			}
 			Some(OperandCode::Pop) => {
 				Debug(format!("pop"), &self.debug_level, DebugLevel::Info);
 				frame.operand_stack.pop();
@@ -421,6 +427,57 @@ impl JvmThread {
 				))
 				.call();
 			}
+		}
+	}
+
+	fn execute_new(&mut self, bytes: &[u8], source_frame: &mut Frame) {
+		let class = source_frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
+		let class_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
+
+		match constant_pool.get_constant_ref(class_index) {
+			Constant::Class(_, class_name_index) => {
+				match constant_pool.get_constant_ref(*class_name_index as usize) {
+					Constant::Utf8(_, _, _, class_name) => {
+						Debug(
+							format!("Make a new {}.", class_name),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+						let mut instantiated_class: Option<Rc<Class>> = None;
+						if let Ok(methodarea) = self.methodarea.lock() {
+							instantiated_class = (*methodarea).get_class_rc(class_name);
+						} else {
+							FatalError::new(FatalErrorType::CouldNotLock(
+								"Method Area.".to_string(),
+								"execute_new".to_string(),
+							))
+							.call();
+						}
+
+						if let Some(instantiated_class) = instantiated_class {
+							let mut object = JvmObject::new(instantiated_class);
+							Debug(format!("{}", object), &self.debug_level, DebugLevel::Info);
+							object.instantiate();
+						} else {
+							FatalError::new(FatalErrorType::ClassNotLoaded(class_name.to_string()))
+								.call();
+						}
+					}
+					_ => FatalError::new(FatalErrorType::InvalidConstantReference(
+						class.get_class_name().unwrap(),
+						"Utf8".to_string(),
+						*class_name_index,
+					))
+					.call(),
+				}
+			}
+			_ => FatalError::new(FatalErrorType::InvalidConstantReference(
+				class.get_class_name().unwrap(),
+				"Classref".to_string(),
+				class_index as u16,
+			))
+			.call(),
 		}
 	}
 
