@@ -39,6 +39,7 @@ enum_from_primitive! {
 		Invokestatic = 0xb8,
 		New = 0xbb,
 		Pop = 0x57,
+		Dup = 0x59,
 		Iadd = 0x60,
 	}
 }

@@ -289,6 +289,17 @@ impl JvmThread {
 				frame.operand_stack.pop();
 				pc_incr = 1;
 			}
+			Some(OperandCode::Dup) => {
+				Debug(format!("dup"), &self.debug_level, DebugLevel::Info);
+				/*
+				 * TODO: The type on the stack must be a "category 1
+				 * computational type."
+				 */
+				if let Some(top) = frame.operand_stack.last() {
+					frame.operand_stack.push(top.clone());
+				}
+				pc_incr = 1;
+			}
 			Some(OperandCode::Iadd) => {
 				Debug(format!("iadd"), &self.debug_level, DebugLevel::Info);
 				self.execute_iadd(frame);
