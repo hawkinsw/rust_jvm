@@ -5,6 +5,7 @@ pub enum FatalErrorType {
 	MethodNotFound(String, String),
 	CouldNotLock(String, String),
 	ClassNotLoaded(String),
+	ClassInstantiationFailed(String),
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
 	InvalidFieldType,
@@ -30,6 +31,9 @@ impl fmt::Display for FatalErrorType {
 			}
 			FatalErrorType::ClassNotLoaded(class) => {
 				write!(f, "Class {} instantiated but not loaded.", class)
+			}
+			FatalErrorType::ClassInstantiationFailed(class) => {
+				write!(f, "Class {} could not be instantiated.", class)
 			}
 			FatalErrorType::MainMethodNotPublicStatic => {
 				write!(f, "Main method is not public or not static.")

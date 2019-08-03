@@ -23,6 +23,7 @@ use jvm::class::Class;
 use jvm::constantpool::ConstantPool;
 use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
+use jvm::object::JvmObject;
 use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
@@ -49,14 +50,14 @@ impl fmt::Display for JvmPrimitiveType {
 #[derive(Clone)]
 pub enum JvmReferenceType {
 	Array(Rc<JvmValue>, u64),
-	Class(Rc<Class>),
+	Class(Rc<JvmObject>),
 	Interface(String),
 }
 
 #[derive(Clone)]
 pub enum JvmValue {
-	Primitive(JvmPrimitiveType, u64),
-	Reference(JvmReferenceType, u64),
+	Primitive(JvmPrimitiveType, u64, u16),
+	Reference(JvmReferenceType, u64, u16),
 }
 
 #[derive(Clone)]
@@ -77,8 +78,12 @@ impl fmt::Display for JvmReferenceType {
 impl fmt::Display for JvmValue {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			JvmValue::Primitive(tipe, value) => return write!(f, "Value: {}: {}", tipe, value),
-			JvmValue::Reference(tipe, value) => return write!(f, "Reference: {}: {}", tipe, value),
+			JvmValue::Primitive(tipe, value, access) => {
+				return write!(f, "Value: {}: {} (access: {:x})", tipe, value, access)
+			}
+			JvmValue::Reference(tipe, value, access) => {
+				return write!(f, "Reference: {}: {} (access: {:x})", tipe, value, access)
+			}
 		}
 	}
 }
@@ -126,15 +131,19 @@ impl PartialEq for JvmType {
 	}
 }
 
+/*
+ * PartialEq -- type and value must equal; the
+ * access flags do not.
+ */
 impl PartialEq for JvmValue {
 	fn eq(&self, other: &Self) -> bool {
 		match self {
-			JvmValue::Primitive(t, v) => match other {
-				JvmValue::Primitive(ot, ov) => ot == t && ov == v,
+			JvmValue::Primitive(t, v, _) => match other {
+				JvmValue::Primitive(ot, ov, _) => ot == t && ov == v,
 				_ => false,
 			},
-			JvmValue::Reference(t, v) => match other {
-				JvmValue::Reference(ot, ov) => ot == t && ov == v,
+			JvmValue::Reference(t, v, _) => match other {
+				JvmValue::Reference(ot, ov, _) => ot == t && ov == v,
 				_ => false,
 			},
 		}

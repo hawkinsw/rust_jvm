@@ -20,7 +20,13 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use jvm::class::Class;
+use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
+use jvm::error::FatalError;
+use jvm::error::FatalErrorType;
+use jvm::typevalues::JvmPrimitiveType;
+use jvm::typevalues::JvmReferenceType;
+use jvm::typevalues::JvmType;
 use jvm::typevalues::JvmValue;
 use std::collections::HashMap;
 use std::fmt;
@@ -42,12 +48,71 @@ impl JvmObject {
 	}
 	pub fn instantiate(&mut self) -> bool {
 		let fields = self.class.get_fields_ref();
+		let constantpool = self.class.get_constant_pool_ref();
+
 		for i in 0..fields.fields_count() {
 			let field = fields.get(i as usize);
 			/*
-			 * TODO: START HERE!\n
+			 * Get the field type.
 			 */
+			let r#type: JvmType =
+				match constantpool.get_constant_ref(field.descriptor_index as usize) {
+					Constant::Utf8(_, _, _, d) => {
+						let descriptor = d.as_bytes();
+						JvmType::from(descriptor)
+					}
+					_ => {
+						FatalError::new(FatalErrorType::InvalidConstantReference(
+							self.class.get_class_name().unwrap(),
+							"Utf8".to_string(),
+							field.descriptor_index,
+						))
+						.call();
+						JvmType::Primitive(JvmPrimitiveType::Void)
+					}
+				};
+
+			/*
+			 * Get the field access modifiers.
+			 */
+			let access_flags = field.access_flags;
+
+			/*
+			 * Get the default field value.
+			 */
+			let value = match r#type {
+				JvmType::Primitive(primitive) => JvmValue::Primitive(primitive, 0, access_flags),
+				JvmType::Reference(reference) => {
+					assert!(false, "TODO: Handle fields that are reference types.");
+					JvmValue::Primitive(JvmPrimitiveType::Void, 0, access_flags)
+				}
+			};
+
+			/*
+			 * Get the field name.
+			 */
+			let name = match constantpool.get_constant_ref(field.name_index as usize) {
+				Constant::Utf8(_, _, _, name) => name.clone(),
+				_ => {
+					FatalError::new(FatalErrorType::InvalidConstantReference(
+						self.class.get_class_name().unwrap(),
+						"Utf8".to_string(),
+						field.name_index,
+					))
+					.call();
+					"".to_string()
+				}
+			};
+
+			/*
+			 * Now, put it in our field table.
+			 */
+			self.fields.insert(name, Rc::new(value));
 		}
+
+		/*
+		 * TODO: Handle superclass instantiation!
+		 */
 		true
 	}
 }

@@ -35,6 +35,7 @@ use jvm::methodarea::MethodArea;
 use jvm::object::JvmObject;
 use jvm::opcodes::OperandCode;
 use jvm::typevalues::JvmPrimitiveType;
+use jvm::typevalues::JvmReferenceType;
 use jvm::typevalues::JvmType;
 use jvm::typevalues::JvmValue;
 use std::fs;
@@ -137,7 +138,7 @@ impl JvmThread {
 				 */
 				frame
 					.operand_stack
-					.push(JvmValue::Primitive(JvmPrimitiveType::Boolean, 0));
+					.push(JvmValue::Primitive(JvmPrimitiveType::Boolean, 0, 0));
 
 				Debug(
 					format!("Frame: {}", frame),
@@ -146,7 +147,7 @@ impl JvmThread {
 				);
 
 				if let Some(v) = self.execute_method(main_method, frame) {
-					if JvmValue::Primitive(JvmPrimitiveType::Void, 0) != v {
+					if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0) != v {
 						FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
 					}
 				}
@@ -259,7 +260,7 @@ impl JvmThread {
 			}
 			Some(OperandCode::r#Return) => {
 				Debug(format!("return"), &self.debug_level, DebugLevel::Info);
-				return OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0));
+				return OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0));
 			}
 			Some(OperandCode::Invokestatic) => {
 				Debug(format!("invokestatic"), &self.debug_level, DebugLevel::Info);
@@ -273,7 +274,14 @@ impl JvmThread {
 			}
 			Some(OperandCode::New) => {
 				Debug(format!("New"), &self.debug_level, DebugLevel::Info);
-				let new_result = self.execute_new(bytes, frame);
+				if let Some(object) = self.execute_new(bytes, frame) {
+					frame.operand_stack.push(object);
+					Debug(
+						format!("frame after new: {}", frame),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+				}
 				pc_incr = 3;
 			}
 			Some(OperandCode::Pop) => {
@@ -311,7 +319,7 @@ impl JvmThread {
 				 * The JvmTypeValue::Primitive with tipe == JvmPrimitiveType::Void
 				 * is a sentinel value that indicates a return from a Void function.
 				 */
-				JvmValue::Primitive(t, v) => {
+				JvmValue::Primitive(t, _, _) => {
 					if t == JvmPrimitiveType::Void {
 						Debug(
 							format!("Not pushing a void onto the caller's stack."),
@@ -340,14 +348,17 @@ impl JvmThread {
 	}
 
 	fn execute_iadd(&mut self, frame: &mut Frame) {
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op1)) = frame.operand_stack.pop()
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op1, _)) =
+			frame.operand_stack.pop()
 		{
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op2)) =
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op2, _)) =
 				frame.operand_stack.pop()
 			{
-				frame
-					.operand_stack
-					.push(JvmValue::Primitive(JvmPrimitiveType::Integer, op1 + op2));
+				frame.operand_stack.push(JvmValue::Primitive(
+					JvmPrimitiveType::Integer,
+					op1 + op2,
+					0,
+				));
 			}
 		}
 	}
@@ -359,7 +370,7 @@ impl JvmThread {
 	fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
 		frame
 			.operand_stack
-			.push(JvmValue::Primitive(JvmPrimitiveType::Integer, x as u64));
+			.push(JvmValue::Primitive(JvmPrimitiveType::Integer, x as u64, 0));
 	}
 
 	fn execute_clinit(&mut self, class: &Rc<Class>, class_name: &String) {
@@ -386,9 +397,11 @@ impl JvmThread {
 
 		if let Some(loaded_class) = loaded_class {
 			if let Ok(mut loaded_class) = loaded_class.lock() {
-				if !(*loaded_class).is_initialized() {
-					(*loaded_class).initialize();
+				if (*loaded_class).is_initialized() {
+					return;
 				}
+
+				(*loaded_class).initialize();
 
 				let clinit: String = "<clinit>".into();
 
@@ -415,7 +428,7 @@ impl JvmThread {
 					);
 
 					if let Some(v) = self.execute_method(clinit_method, clinit_frame) {
-						if JvmValue::Primitive(JvmPrimitiveType::Void, 0) != v {
+						if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0) != v {
 							FatalError::new(FatalErrorType::ClassInitMethodReturnedValue).call();
 						}
 					}
@@ -430,23 +443,25 @@ impl JvmThread {
 		}
 	}
 
-	fn execute_new(&mut self, bytes: &[u8], source_frame: &mut Frame) {
+	fn execute_new(&mut self, bytes: &[u8], source_frame: &mut Frame) -> Option<JvmValue> {
 		let class = source_frame.class().unwrap();
 		let constant_pool = class.get_constant_pool_ref();
-		let class_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
+		let instantiated_class_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
-		match constant_pool.get_constant_ref(class_index) {
-			Constant::Class(_, class_name_index) => {
-				match constant_pool.get_constant_ref(*class_name_index as usize) {
-					Constant::Utf8(_, _, _, class_name) => {
+		match constant_pool.get_constant_ref(instantiated_class_index) {
+			Constant::Class(_, instantiated_class_name_index) => {
+				match constant_pool.get_constant_ref(*instantiated_class_name_index as usize) {
+					Constant::Utf8(_, _, _, instantiated_class_name) => {
 						Debug(
-							format!("Make a new {}.", class_name),
+							format!("Make a new {}.", instantiated_class_name),
 							&self.debug_level,
 							DebugLevel::Info,
 						);
+						let mut result: Option<JvmValue> = None;
 						let mut instantiated_class: Option<Rc<Class>> = None;
 						if let Ok(methodarea) = self.methodarea.lock() {
-							instantiated_class = (*methodarea).get_class_rc(class_name);
+							instantiated_class =
+								(*methodarea).get_class_rc(instantiated_class_name);
 						} else {
 							FatalError::new(FatalErrorType::CouldNotLock(
 								"Method Area.".to_string(),
@@ -454,30 +469,44 @@ impl JvmThread {
 							))
 							.call();
 						}
-
 						if let Some(instantiated_class) = instantiated_class {
+							self.execute_clinit(&instantiated_class, instantiated_class_name);
 							let mut object = JvmObject::new(instantiated_class);
 							Debug(format!("{}", object), &self.debug_level, DebugLevel::Info);
 							object.instantiate();
+							result = Some(JvmValue::Reference(
+								JvmReferenceType::Class(Rc::new(object)),
+								0,
+								0,
+							))
 						} else {
-							FatalError::new(FatalErrorType::ClassNotLoaded(class_name.to_string()))
-								.call();
+							FatalError::new(FatalErrorType::ClassNotLoaded(
+								instantiated_class_name.to_string(),
+							))
+							.call();
 						}
+						result
 					}
-					_ => FatalError::new(FatalErrorType::InvalidConstantReference(
-						class.get_class_name().unwrap(),
-						"Utf8".to_string(),
-						*class_name_index,
-					))
-					.call(),
+					_ => {
+						FatalError::new(FatalErrorType::InvalidConstantReference(
+							class.get_class_name().unwrap(),
+							"Utf8".to_string(),
+							*instantiated_class_name_index,
+						))
+						.call();
+						None
+					}
 				}
 			}
-			_ => FatalError::new(FatalErrorType::InvalidConstantReference(
-				class.get_class_name().unwrap(),
-				"Classref".to_string(),
-				class_index as u16,
-			))
-			.call(),
+			_ => {
+				FatalError::new(FatalErrorType::InvalidConstantReference(
+					class.get_class_name().unwrap(),
+					"Classref".to_string(),
+					instantiated_class_index as u16,
+				))
+				.call();
+				None
+			}
 		}
 	}
 
