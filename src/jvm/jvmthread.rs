@@ -277,6 +277,26 @@ impl JvmThread {
 				self.execute_iload_x(3, frame);
 				pc_incr = 1;
 			}
+			Some(OperandCode::Aload_0) => {
+				Debug(format!("aload_0"), &self.debug_level, DebugLevel::Info);
+				self.execute_aload_x(0, frame);
+				pc_incr = 1;
+			}
+			Some(OperandCode::Aload_1) => {
+				Debug(format!("aload_1"), &self.debug_level, DebugLevel::Info);
+				self.execute_aload_x(1, frame);
+				pc_incr = 1;
+			}
+			Some(OperandCode::Aload_2) => {
+				Debug(format!("aload_2"), &self.debug_level, DebugLevel::Info);
+				self.execute_aload_x(2, frame);
+				pc_incr = 1;
+			}
+			Some(OperandCode::Aload_3) => {
+				Debug(format!("aload_3"), &self.debug_level, DebugLevel::Info);
+				self.execute_aload_x(3, frame);
+				pc_incr = 1;
+			}
 			Some(OperandCode::Ireturn) => {
 				Debug(format!("ireturn"), &self.debug_level, DebugLevel::Info);
 				return OpcodeResult::Value(frame.operand_stack.pop().unwrap());
@@ -408,6 +428,24 @@ impl JvmThread {
 					0,
 				));
 			}
+		}
+	}
+
+	fn execute_aload_x(&mut self, x: usize, frame: &mut Frame) {
+		if x < frame.locals.len() {
+			if let JvmValue::Reference(_, _, _) = frame.locals[x] {
+				frame.operand_stack.push(frame.locals[x].clone());
+			} else {
+				/*
+				 * TODO: This is a fatal error -- the type must be a reference.
+				 */
+				assert!(false, "Type not a reference.");
+			}
+		} else {
+			/*
+			 * TODO: This is a fatal error -- not enough locals.
+			 */
+			assert!(false, "Not enough locals.");
 		}
 	}
 
