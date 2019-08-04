@@ -22,6 +22,7 @@
 use enum_primitive::FromPrimitive;
 use jvm::class::Class;
 use jvm::constant::Constant;
+use jvm::constantpool::ConstantPool;
 use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
 use jvm::environment::Environment;
@@ -55,6 +56,28 @@ pub struct JvmThread {
 enum OpcodeResult {
 	Incr(usize),
 	Value(JvmValue),
+}
+
+fn get_method_and_class_name(index: usize, cp: &ConstantPool) -> Option<(String, String)> {
+	let mut result: Option<(String, String)> = None;
+	if let Constant::Methodref(_, class_index, method_index) = cp.get_constant_ref(index) {
+		if let Constant::Class(_, class_name_index) = cp.get_constant_ref(*class_index as usize) {
+			if let Constant::NameAndType(_, method_name_index, _) =
+				cp.get_constant_ref(*method_index as usize)
+			{
+				if let Constant::Utf8(_, _, _, class_name) =
+					cp.get_constant_ref(*class_name_index as usize)
+				{
+					if let Constant::Utf8(_, _, _, method_name) =
+						cp.get_constant_ref(*method_name_index as usize)
+					{
+						result = Some((method_name.to_string(), class_name.to_string()));
+					}
+				}
+			}
+		}
+	}
+	result
 }
 
 impl JvmThread {
@@ -261,6 +284,20 @@ impl JvmThread {
 			Some(OperandCode::r#Return) => {
 				Debug(format!("return"), &self.debug_level, DebugLevel::Info);
 				return OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0));
+			}
+			Some(OperandCode::Invokespecial) => {
+				Debug(
+					format!("invokespecial"),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				/*
+				 * Start by assuming failure.
+				 */
+				pc_incr = 0;
+
+				let invokespecial_result = self.execute_invokespecial(bytes, frame);
+				pc_incr = self.handle_invoke_result(invokespecial_result, frame, 3);
 			}
 			Some(OperandCode::Invokestatic) => {
 				Debug(format!("invokestatic"), &self.debug_level, DebugLevel::Info);
@@ -521,6 +558,123 @@ impl JvmThread {
 		}
 	}
 
+	fn execute_invokespecial(
+		&mut self,
+		bytes: &[u8],
+		source_frame: &mut Frame,
+	) -> Option<OpcodeResult> {
+		let class = source_frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
+		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
+
+		if let Some((method_name, invoked_class_name)) =
+			get_method_and_class_name(method_index, constant_pool)
+		{
+			Debug(
+				format!("Invoke Special: {}.{}", invoked_class_name, method_name),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
+
+			let mut invoked_class: Option<Rc<Class>> = None;
+			if let Ok(mut methodarea) = self.methodarea.lock() {
+				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
+			}
+			if let Some(invoked_class) = invoked_class {
+				/*
+				 * TODO: We need to follow the method resolution process here. See 5.4.3.3.
+				 */
+				if let Some(method) = invoked_class
+					.get_methods_ref()
+					.get_by_name(&method_name, invoked_class.get_constant_pool_ref())
+				{
+					Debug(
+						format!("method: {}", method),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+
+					if ((MethodAccessFlags::Protected as u16) & method.access_flags) != 0 {
+						assert!(false, "TODO: Finally, if the resolved method is protected (§4.6), and it is a member of a superclass of the current class, and the method is not declared in the same run-time package (§5.3) as the current class, then the class of objectref must be either the current class or a subclass of the current class.");
+					}
+
+					/*
+					 * TODO:
+						 Next, the resolved method is selected for invocation unless all of the following conditions are true:
+
+						The ACC_SUPER flag (Table 4.1) is set for the current class.
+
+						The class of the resolved method is a superclass of the current class.
+
+						The resolved method is not an instance initialization method (§2.9).
+
+						If the above conditions are true, the actual method to be invoked is selected by the following lookup procedure. Let C be the direct superclass of the current class:
+
+						If C contains a declaration for an instance method with the same name and descriptor as the resolved method, then this method will be invoked. The lookup procedure terminates.
+
+						Otherwise, if C has a superclass, this same lookup procedure is performed recursively using the direct superclass of C. The method to be invoked is the result of the recursive invocation of this lookup procedure.
+
+						Otherwise, an AbstractMethodError is raised.
+					*/
+
+					let mut invoked_frame = Frame::new();
+					invoked_frame.class = Some(Rc::clone(&invoked_class));
+
+					/*
+					 * The first value on the stack is an object reference. It becomes
+					 * the 0th local variable to the special method.
+					 *
+					 * TODO: Check that the first value on the stack is a reference.
+					 */
+					if let Some(top) = source_frame.operand_stack.pop() {
+						invoked_frame.locals.push(top);
+					}
+
+					/*
+					 * The other parameters are on the stack, too. Move the parameters
+					 * from the source stack to the invoked stack.
+					 */
+					let parameter_count =
+						method.get_parameter_count(invoked_class.get_constant_pool_ref());
+					for i in 0..parameter_count {
+						if let Some(parameter) = source_frame.operand_stack.pop() {
+							invoked_frame.locals.push(parameter);
+						} else {
+							assert!(
+								false,
+								"Not enough parameters on the stack to call {}.{}.",
+								invoked_class_name, method_name
+							);
+						}
+					}
+
+					Debug(
+						format!("Parameter count: {}", parameter_count),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					Debug(
+						format!("invoked_frame: {}", invoked_frame),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+
+					if let Some(v) = self.execute_method(&method, invoked_frame) {
+						Debug(
+							format!("Returning from a method{}", method.clone()),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+						return Some(OpcodeResult::Value(v));
+					}
+				}
+			} else {
+				FatalError::new(FatalErrorType::ClassNotFound(invoked_class_name.clone())).call()
+			}
+		}
+		None
+	}
+
 	fn execute_invokestatic(
 		&mut self,
 		bytes: &[u8],
@@ -530,118 +684,82 @@ impl JvmThread {
 		let constant_pool = class.get_constant_pool_ref();
 		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
-		match constant_pool.get_constant_ref(method_index) {
-			Constant::Methodref(_, class_index, method_index) => {
-				if let Constant::Class(_, class_name_index) =
-					constant_pool.get_constant_ref(*class_index as usize)
+		if let Some((method_name, invoked_class_name)) =
+			get_method_and_class_name(method_index, constant_pool)
+		{
+			Debug(
+				format!("Invoke Static: {}.{}", invoked_class_name, method_name),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
+			let mut invoked_class: Option<Rc<Class>> = None;
+			if let Ok(mut methodarea) = self.methodarea.lock() {
+				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
+			}
+			if let Some(invoked_class) = invoked_class {
+				/*
+				 * TODO: We need to follow the method resolution process here. See 5.4.3.3.
+				 */
+				if let Some(method) = invoked_class
+					.get_methods_ref()
+					.get_by_name(&method_name, invoked_class.get_constant_pool_ref())
 				{
-					if let Constant::NameAndType(_, method_name_index, _) =
-						constant_pool.get_constant_ref(*method_index as usize)
-					{
-						if let Constant::Utf8(_, _, _, invoked_class_name) =
-							constant_pool.get_constant_ref(*class_name_index as usize)
-						{
-							if let Constant::Utf8(_, _, _, method_name) =
-								constant_pool.get_constant_ref(*method_name_index as usize)
-							{
-								Debug(
-									format!(
-										"Invoke Static: {}.{}",
-										invoked_class_name, method_name
-									),
-									&self.debug_level,
-									DebugLevel::Info,
-								);
-								/*
-								 * Steps:
-								 * 1. Get the class containing the method.
-								 * 2. Get the method.
-								 * 3. Create a frame.
-								 * 4. Populate the frame.
-								 * 5. Execute the method
-								 */
-								let mut invoked_class: Option<Rc<Class>> = None;
-								if let Ok(mut methodarea) = self.methodarea.lock() {
-									invoked_class = (*methodarea).get_class_rc(invoked_class_name);
-								}
-								if let Some(invoked_class) = invoked_class {
-									if let Some(method) =
-										invoked_class.get_methods_ref().get_by_name(
-											method_name,
-											invoked_class.get_constant_pool_ref(),
-										) {
-										Debug(
-											format!("method: {}", method),
-											&self.debug_level,
-											DebugLevel::Info,
-										);
+					Debug(
+						format!("method: {}", method),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					/*
+					 * This is an operation that requires the target class
+					 * be initialized.
+					 */
+					self.execute_clinit(&invoked_class, &invoked_class_name);
 
-										/*
-										 * This is an operation that requires the target class
-										 * be initialized.
-										 */
-										self.execute_clinit(&invoked_class, invoked_class_name);
+					let mut invoked_frame = Frame::new();
+					invoked_frame.class = Some(Rc::clone(&invoked_class));
 
-										let mut invoked_frame = Frame::new();
-										invoked_frame.class = Some(Rc::clone(&invoked_class));
-
-										/*
-										 * Move the parameters from the source stack to the
-										 * invoked stack.
-										 */
-										let parameter_count = method.get_parameter_count(
-											invoked_class.get_constant_pool_ref(),
-										);
-										for i in 0..parameter_count {
-											if let Some(parameter) =
-												source_frame.operand_stack.pop()
-											{
-												invoked_frame.locals.push(parameter);
-											} else {
-												assert!(false,
-												  "Not enough parameters on the stack to call {}.{}.",
-												  invoked_class_name,
-												  method_name);
-											}
-										}
-
-										Debug(
-											format!("Parameter count: {}", parameter_count),
-											&self.debug_level,
-											DebugLevel::Info,
-										);
-										Debug(
-											format!("invoked_frame: {}", invoked_frame),
-											&self.debug_level,
-											DebugLevel::Info,
-										);
-
-										if let Some(v) = self.execute_method(&method, invoked_frame)
-										{
-											Debug(
-												format!(
-													"Returning from a method{}",
-													method.clone()
-												),
-												&self.debug_level,
-												DebugLevel::Info,
-											);
-											return Some(OpcodeResult::Value(v));
-										}
-									}
-								} else {
-									FatalError::new(FatalErrorType::ClassNotFound(
-										invoked_class_name.clone(),
-									))
-									.call()
-								}
-							}
+					/*
+					 * Move the parameters from the source stack to the
+					 * invoked stack.
+					 */
+					let parameter_count =
+						method.get_parameter_count(invoked_class.get_constant_pool_ref());
+					for i in 0..parameter_count {
+						if let Some(parameter) = source_frame.operand_stack.pop() {
+							invoked_frame.locals.push(parameter);
+						} else {
+							assert!(
+								false,
+								"Not enough parameters on the stack to call {}.{}.",
+								invoked_class_name, method_name
+							);
 						}
 					}
+
+					Debug(
+						format!("Parameter count: {}", parameter_count),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					Debug(
+						format!("invoked_frame: {}", invoked_frame),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+
+					if let Some(v) = self.execute_method(&method, invoked_frame) {
+						Debug(
+							format!("Returning from a method{}", method.clone()),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+						return Some(OpcodeResult::Value(v));
+					}
 				}
+			} else {
+				FatalError::new(FatalErrorType::ClassNotFound(invoked_class_name.clone())).call()
 			}
-			_ => (),
-		};
+		}
 		None
 	}
 }

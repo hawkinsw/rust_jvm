@@ -36,6 +36,7 @@ enum_from_primitive! {
 		Iload_3 = 0x1d,
 		Ireturn = 0xac,
 		r#Return = 0xb1,
+		Invokespecial = 0xb7,
 		Invokestatic = 0xb8,
 		New = 0xbb,
 		Pop = 0x57,
