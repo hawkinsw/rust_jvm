@@ -6,6 +6,8 @@ pub enum FatalErrorType {
 	CouldNotLock(String, String),
 	ClassNotLoaded(String),
 	ClassInstantiationFailed(String),
+	WrongType(String, String),
+	NotEnough(String, usize, String),
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
 	InvalidFieldType,
@@ -34,6 +36,12 @@ impl fmt::Display for FatalErrorType {
 			}
 			FatalErrorType::ClassInstantiationFailed(class) => {
 				write!(f, "Class {} could not be instantiated.", class)
+			}
+			FatalErrorType::WrongType(instruction, expected) => {
+				write!(f, "Wrong type: {} requires {}.", instruction, expected)
+			}
+			FatalErrorType::NotEnough(instruction, needed, from) => {
+				write!(f, "{} needs {} {}.", instruction, needed, from)
 			}
 			FatalErrorType::MainMethodNotPublicStatic => {
 				write!(f, "Main method is not public or not static.")

@@ -436,16 +436,19 @@ impl JvmThread {
 			if let JvmValue::Reference(_, _, _) = frame.locals[x] {
 				frame.operand_stack.push(frame.locals[x].clone());
 			} else {
-				/*
-				 * TODO: This is a fatal error -- the type must be a reference.
-				 */
-				assert!(false, "Type not a reference.");
+				FatalError::new(FatalErrorType::WrongType(
+					format!("aload_{}", x),
+					"Reference".to_string(),
+				))
+				.call();
 			}
 		} else {
-			/*
-			 * TODO: This is a fatal error -- not enough locals.
-			 */
-			assert!(false, "Not enough locals.");
+			FatalError::new(FatalErrorType::NotEnough(
+				format!("aload_{}", x),
+				x,
+				"locals".to_string(),
+			))
+			.call();
 		}
 	}
 
@@ -678,11 +681,12 @@ impl JvmThread {
 						if let Some(parameter) = source_frame.operand_stack.pop() {
 							invoked_frame.locals.push(parameter);
 						} else {
-							assert!(
-								false,
-								"Not enough parameters on the stack to call {}.{}.",
-								invoked_class_name, method_name
-							);
+							FatalError::new(FatalErrorType::NotEnough(
+								"invokespecial".to_string(),
+								i,
+								"stack operands".to_string(),
+							))
+							.call();
 						}
 					}
 
@@ -766,11 +770,12 @@ impl JvmThread {
 						if let Some(parameter) = source_frame.operand_stack.pop() {
 							invoked_frame.locals.push(parameter);
 						} else {
-							assert!(
-								false,
-								"Not enough parameters on the stack to call {}.{}.",
-								invoked_class_name, method_name
-							);
+							FatalError::new(FatalErrorType::NotEnough(
+								"invokestatic".to_string(),
+								i,
+								"stack operands".to_string(),
+							))
+							.call();
 						}
 					}
 
