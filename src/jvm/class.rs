@@ -56,8 +56,13 @@ impl Class {
 		&self.constant_pool
 	}
 
-	pub fn get_method_ref_by_name(&self, method_name: &String) -> Option<&Method> {
-		self.methods.get_by_name(&method_name, &self.constant_pool)
+	pub fn get_method_ref_by_name_and_type(
+		&self,
+		method_name: &String,
+		method_type: &String,
+	) -> Option<&Method> {
+		self.methods
+			.get_by_name_and_type(&method_name, &method_type, &self.constant_pool)
 	}
 
 	pub fn get_methods_ref(&self) -> &Methods {

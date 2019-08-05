@@ -58,11 +58,14 @@ enum OpcodeResult {
 	Value(JvmValue),
 }
 
-fn get_method_and_class_name(index: usize, cp: &ConstantPool) -> Option<(String, String)> {
-	let mut result: Option<(String, String)> = None;
+fn get_method_name_method_type_class_name(
+	index: usize,
+	cp: &ConstantPool,
+) -> Option<(String, String, String)> {
+	let mut result: Option<(String, String, String)> = None;
 	if let Constant::Methodref(_, class_index, method_index) = cp.get_constant_ref(index) {
 		if let Constant::Class(_, class_name_index) = cp.get_constant_ref(*class_index as usize) {
-			if let Constant::NameAndType(_, method_name_index, _) =
+			if let Constant::NameAndType(_, method_name_index, method_type_index) =
 				cp.get_constant_ref(*method_index as usize)
 			{
 				if let Constant::Utf8(_, _, _, class_name) =
@@ -71,7 +74,15 @@ fn get_method_and_class_name(index: usize, cp: &ConstantPool) -> Option<(String,
 					if let Constant::Utf8(_, _, _, method_name) =
 						cp.get_constant_ref(*method_name_index as usize)
 					{
-						result = Some((method_name.to_string(), class_name.to_string()));
+						if let Constant::Utf8(_, _, _, method_type) =
+							cp.get_constant_ref(*method_type_index as usize)
+						{
+							result = Some((
+								method_name.to_string(),
+								method_type.to_string(),
+								class_name.to_string(),
+							));
+						}
 					}
 				}
 			}
@@ -117,7 +128,19 @@ impl JvmThread {
 									DebugLevel::Info,
 								);
 								if let Ok(mut methodarea) = self.methodarea.lock() {
-									(*methodarea).load_class_from_file(&class_filename);
+									if let Some(class) =
+										(*methodarea).load_class_from_file(&class_filename)
+									{
+										Debug(
+											format!("Loaded class {}.\n", class),
+											&self.debug_level,
+											DebugLevel::Info,
+										);
+									} else {
+										/*
+										 * TODO: Warn that we couldn't load this class for some reason.
+										 */
+									}
 								}
 							}
 						}
@@ -143,7 +166,9 @@ impl JvmThread {
 			 */
 			self.execute_clinit(&main_class, class_name);
 
-			if let Some(main_method) = main_class.get_method_ref_by_name(method_name) {
+			if let Some(main_method) = main_class
+				.get_method_ref_by_name_and_type(method_name, &"([Ljava/lang/String;)V".to_string())
+			{
 				if main_method.access_flags
 					!= ((MethodAccessFlags::Public as u16) | (MethodAccessFlags::Static as u16))
 				{
@@ -497,10 +522,11 @@ impl JvmThread {
 				/*
 				 * We must invoke the clinit method, if one exists.
 				 */
-				if let Some(clinit_method) = class
-					.get_methods_ref()
-					.get_by_name(&clinit, class.get_constant_pool_ref())
-				{
+				if let Some(clinit_method) = class.get_methods_ref().get_by_name_and_type(
+					&clinit,
+					&"()V".to_string(),
+					class.get_constant_pool_ref(),
+				) {
 					Debug(
 						format!("clinit Method: {}", clinit_method),
 						&self.debug_level,
@@ -608,8 +634,8 @@ impl JvmThread {
 		let constant_pool = class.get_constant_pool_ref();
 		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
-		if let Some((method_name, invoked_class_name)) =
-			get_method_and_class_name(method_index, constant_pool)
+		if let Some((method_name, method_type, invoked_class_name)) =
+			get_method_name_method_type_class_name(method_index, constant_pool)
 		{
 			Debug(
 				format!("Invoke Special: {}.{}", invoked_class_name, method_name),
@@ -625,10 +651,11 @@ impl JvmThread {
 				/*
 				 * TODO: We need to follow the method resolution process here. See 5.4.3.3.
 				 */
-				if let Some(method) = invoked_class
-					.get_methods_ref()
-					.get_by_name(&method_name, invoked_class.get_constant_pool_ref())
-				{
+				if let Some(method) = invoked_class.get_methods_ref().get_by_name_and_type(
+					&method_name,
+					&method_type,
+					invoked_class.get_constant_pool_ref(),
+				) {
 					Debug(
 						format!("method: {}", method),
 						&self.debug_level,
@@ -662,16 +689,6 @@ impl JvmThread {
 					invoked_frame.class = Some(Rc::clone(&invoked_class));
 
 					/*
-					 * The first value on the stack is an object reference. It becomes
-					 * the 0th local variable to the special method.
-					 *
-					 * TODO: Check that the first value on the stack is a reference.
-					 */
-					if let Some(top) = source_frame.operand_stack.pop() {
-						invoked_frame.locals.push(top);
-					}
-
-					/*
 					 * The other parameters are on the stack, too. Move the parameters
 					 * from the source stack to the invoked stack.
 					 */
@@ -679,7 +696,7 @@ impl JvmThread {
 						method.get_parameter_count(invoked_class.get_constant_pool_ref());
 					for i in 0..parameter_count {
 						if let Some(parameter) = source_frame.operand_stack.pop() {
-							invoked_frame.locals.push(parameter);
+							invoked_frame.locals.insert(0, parameter);
 						} else {
 							FatalError::new(FatalErrorType::NotEnough(
 								"invokespecial".to_string(),
@@ -687,6 +704,19 @@ impl JvmThread {
 								"stack operands".to_string(),
 							))
 							.call();
+						}
+					}
+					/*
+					 * The first value on the stack is an object reference. It becomes
+					 * the 0th local variable to the special method.
+					 */
+					if let Some(top) = source_frame.operand_stack.pop() {
+						if let JvmValue::Reference(_, _, _) = top {
+							invoked_frame.locals.insert(0, top);
+						} else {
+							/*
+							 * TODO: Check that the first value on the stack is a reference.
+							 */
 						}
 					}
 
@@ -726,8 +756,8 @@ impl JvmThread {
 		let constant_pool = class.get_constant_pool_ref();
 		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
-		if let Some((method_name, invoked_class_name)) =
-			get_method_and_class_name(method_index, constant_pool)
+		if let Some((method_name, method_type, invoked_class_name)) =
+			get_method_name_method_type_class_name(method_index, constant_pool)
 		{
 			Debug(
 				format!("Invoke Static: {}.{}", invoked_class_name, method_name),
@@ -742,10 +772,11 @@ impl JvmThread {
 				/*
 				 * TODO: We need to follow the method resolution process here. See 5.4.3.3.
 				 */
-				if let Some(method) = invoked_class
-					.get_methods_ref()
-					.get_by_name(&method_name, invoked_class.get_constant_pool_ref())
-				{
+				if let Some(method) = invoked_class.get_methods_ref().get_by_name_and_type(
+					&method_name,
+					&method_type,
+					invoked_class.get_constant_pool_ref(),
+				) {
 					Debug(
 						format!("method: {}", method),
 						&self.debug_level,
@@ -768,7 +799,7 @@ impl JvmThread {
 						method.get_parameter_count(invoked_class.get_constant_pool_ref());
 					for i in 0..parameter_count {
 						if let Some(parameter) = source_frame.operand_stack.pop() {
-							invoked_frame.locals.push(parameter);
+							invoked_frame.locals.insert(0, parameter);
 						} else {
 							FatalError::new(FatalErrorType::NotEnough(
 								"invokestatic".to_string(),

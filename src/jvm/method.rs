@@ -182,15 +182,25 @@ impl Methods {
 		self.byte_len
 	}
 
-	pub fn get_by_name(&self, method_name: &String, cp: &ConstantPool) -> Option<&Method> {
+	pub fn get_by_name_and_type(
+		&self,
+		method_name: &String,
+		method_type: &String,
+		cp: &ConstantPool,
+	) -> Option<&Method> {
 		for i in 0..self.methods.len() {
-			match cp.get_constant_ref(self.methods[i].name_index as usize) {
-				Constant::Utf8(_, _, _, value) => {
-					if *value == *method_name {
-						return Some(&self.methods[i]);
+			if let Constant::Utf8(_, _, _, value) =
+				cp.get_constant_ref(self.methods[i].name_index as usize)
+			{
+				if *value == *method_name {
+					if let Constant::Utf8(_, _, _, value) =
+						cp.get_constant_ref(self.methods[i].descriptor_index as usize)
+					{
+						if *value == *method_type {
+							return Some(&self.methods[i]);
+						}
 					}
 				}
-				_ => (),
 			}
 		}
 		None
