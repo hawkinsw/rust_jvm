@@ -8,6 +8,7 @@ pub enum FatalErrorType {
 	ClassInstantiationFailed(String),
 	WrongType(String, String),
 	NotEnough(String, usize, String),
+	MethodResolutionFailed,
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
 	InvalidFieldType,
@@ -43,6 +44,7 @@ impl fmt::Display for FatalErrorType {
 			FatalErrorType::NotEnough(instruction, needed, from) => {
 				write!(f, "{} needs {} {}.", instruction, needed, from)
 			}
+			FatalErrorType::MethodResolutionFailed => write!(f, "Method resolution failed!"),
 			FatalErrorType::MainMethodNotPublicStatic => {
 				write!(f, "Main method is not public or not static.")
 			}

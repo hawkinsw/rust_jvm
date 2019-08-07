@@ -21,6 +21,7 @@
  */
 use enum_primitive::FromPrimitive;
 use jvm::class::Class;
+use jvm::class::ClassAccessFlags;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
 use jvm::debug::Debug;
@@ -643,47 +644,62 @@ impl JvmThread {
 				DebugLevel::Info,
 			);
 
+			/*
+			 * We could simplify this if we stored methods inside the
+			 * class as a rcs. That would mean that we'd be able to return
+			 * the class and the method from within the resolve_method
+			 * and not have any copies.
+			 *
+			 * Because we don't do that, we have to resolve the method
+			 * into the class that contains the resolved method and then,
+			 * later, dig into the class and get the method ref.
+			 */
 			let mut invoked_class: Option<Rc<Class>> = None;
 			if let Ok(mut methodarea) = self.methodarea.lock() {
 				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
+				invoked_class = if let Some(invoked_class) = invoked_class {
+					(*methodarea).resolve_method(&class, &invoked_class, &method_name, &method_type)
+				} else {
+					None
+				}
 			}
+
 			if let Some(invoked_class) = invoked_class {
-				/*
-				 * TODO: We need to follow the method resolution process here. See 5.4.3.3.
-				 */
 				if let Some(method) = invoked_class.get_methods_ref().get_by_name_and_type(
 					&method_name,
 					&method_type,
 					invoked_class.get_constant_pool_ref(),
 				) {
-					Debug(
-						format!("method: {}", method),
-						&self.debug_level,
-						DebugLevel::Info,
-					);
-
 					if ((MethodAccessFlags::Protected as u16) & method.access_flags) != 0 {
 						assert!(false, "TODO: Finally, if the resolved method is protected (§4.6), and it is a member of a superclass of the current class, and the method is not declared in the same run-time package (§5.3) as the current class, then the class of objectref must be either the current class or a subclass of the current class.");
 					}
+					/* TODO:
+						Next, the resolved method is selected for invocation unless all of the following conditions are true:
 
-					/*
-					 * TODO:
-						 Next, the resolved method is selected for invocation unless all of the following conditions are true:
+					   The ACC_SUPER flag (Table 4.1) is set for the current class.
 
-						The ACC_SUPER flag (Table 4.1) is set for the current class.
-
-						The class of the resolved method is a superclass of the current class.
-
-						The resolved method is not an instance initialization method (§2.9).
-
-						If the above conditions are true, the actual method to be invoked is selected by the following lookup procedure. Let C be the direct superclass of the current class:
-
-						If C contains a declaration for an instance method with the same name and descriptor as the resolved method, then this method will be invoked. The lookup procedure terminates.
-
-						Otherwise, if C has a superclass, this same lookup procedure is performed recursively using the direct superclass of C. The method to be invoked is the result of the recursive invocation of this lookup procedure.
-
-						Otherwise, an AbstractMethodError is raised.
+						 The resolved method is not an instance initialization method (§2.9).
+					   ...
 					*/
+
+					if ((ClassAccessFlags::Super as u16) & class.access_flags) != 0
+						&& method_name != "<init>"
+					{
+						/*
+							...
+
+							The class of the resolved method is a superclass of the current class.
+
+							If the above conditions are true, the actual method to be invoked is selected by the following lookup procedure. Let C be the direct superclass of the current class:
+
+							If C contains a declaration for an instance method with the same name and descriptor as the resolved method, then this method will be invoked. The lookup procedure terminates.
+
+							Otherwise, if C has a superclass, this same lookup procedure is performed recursively using the direct superclass of C. The method to be invoked is the result of the recursive invocation of this lookup procedure.
+
+							Otherwise, an AbstractMethodError is raised.
+						*/
+						assert!(false);
+					}
 
 					let mut invoked_frame = Frame::new();
 					invoked_frame.class = Some(Rc::clone(&invoked_class));
