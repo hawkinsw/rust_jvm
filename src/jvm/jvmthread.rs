@@ -213,7 +213,27 @@ impl JvmThread {
 	}
 
 	fn execute_method(&mut self, method: &Method, mut frame: Frame) -> Option<JvmValue> {
+		/*
+		 * The locals are only going to have enough size for the parameters.
+		 * Resize as appropriate.
+		 */
 		let class = frame.class().unwrap();
+
+		Debug(
+			format!(
+				"Resizing local parameter array from {} to {}\n",
+				frame.locals.len(),
+				method.max_locals
+			),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+
+		frame.locals.resize(
+			method.max_locals,
+			JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0),
+		);
+
 		if let Some(code) = method.get_code(class.get_constant_pool_ref()) {
 			let mut pc = 0;
 			while {
@@ -787,7 +807,7 @@ impl JvmThread {
 
 					if let Some(v) = self.execute_method(&method, invoked_frame) {
 						Debug(
-							format!("Returning from a method{}", method.clone()),
+							format!("Returning from a method: {}", method.clone()),
 							&self.debug_level,
 							DebugLevel::Info,
 						);
