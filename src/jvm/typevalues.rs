@@ -65,6 +65,13 @@ pub enum JvmType {
 	Primitive(JvmPrimitiveType),
 	Reference(JvmReferenceType),
 }
+
+impl Default for JvmType {
+	fn default() -> Self {
+		JvmType::Primitive(JvmPrimitiveType::Invalid)
+	}
+}
+
 impl fmt::Display for JvmReferenceType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
