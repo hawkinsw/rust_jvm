@@ -11,7 +11,7 @@ pub enum FatalErrorType {
 	MethodResolutionFailed,
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
-	InvalidFieldType,
+	InvalidFieldType(char),
 	InvalidMethodDescriptor,
 	InvalidConstantReference(String, String, u16),
 	VoidMethodReturnedValue,
@@ -57,7 +57,7 @@ impl fmt::Display for FatalErrorType {
 				"Invalid reference {} into Class {}'s constant pool; expected {}.",
 				index, class, expected
 			),
-			FatalErrorType::InvalidFieldType => write!(f, "Main method is not void."),
+			FatalErrorType::InvalidFieldType(field) => write!(f, "Invalid field type: {}.", field),
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
 	}
