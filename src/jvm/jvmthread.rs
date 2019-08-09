@@ -175,9 +175,7 @@ impl JvmThread {
 				{
 					FatalError::new(FatalErrorType::MainMethodNotPublicStatic).call();
 				}
-				if JvmType::Primitive(JvmPrimitiveType::Void)
-					!= main_method.get_return_type(main_class.get_constant_pool_ref())
-				{
+				if JvmType::Primitive(JvmPrimitiveType::Void) != main_method.return_type {
 					FatalError::new(FatalErrorType::MainMethodNotVoid).call();
 				}
 				let mut frame = Frame::new();
@@ -749,8 +747,7 @@ impl JvmThread {
 					 * The other parameters are on the stack, too. Move the parameters
 					 * from the source stack to the invoked stack.
 					 */
-					let parameter_count =
-						method.get_parameter_count(invoked_class.get_constant_pool_ref());
+					let parameter_count = method.parameter_count;
 					for i in 0..parameter_count {
 						if let Some(parameter) = source_frame.operand_stack.pop() {
 							invoked_frame.locals.insert(0, parameter);
@@ -852,8 +849,7 @@ impl JvmThread {
 					 * Move the parameters from the source stack to the
 					 * invoked stack.
 					 */
-					let parameter_count =
-						method.get_parameter_count(invoked_class.get_constant_pool_ref());
+					let parameter_count = method.parameter_count;
 					for i in 0..parameter_count {
 						if let Some(parameter) = source_frame.operand_stack.pop() {
 							invoked_frame.locals.insert(0, parameter);
