@@ -54,6 +54,9 @@ pub struct Method {
 	pub class_index: u16,
 	pub descriptor_index: u16,
 	pub attributes_count: u16,
+	pub max_locals: usize,
+	pub parameter_count: usize,
+	pub return_type: JvmType,
 	pub attributes: Attributes,
 }
 
@@ -72,59 +75,22 @@ impl Method {
 		None
 	}
 
-	pub fn get_return_type(&self, cp: &ConstantPool) -> JvmType {
-		let mut result = JvmType::Primitive(JvmPrimitiveType::Invalid);
-		if let Constant::Utf8(_, _, _, s) = cp.get_constant_ref(self.descriptor_index as usize) {
-			let mut signature = s.as_bytes();
-			if let Some(mut index) = s.find(')') {
-				index = index + 1;
-				result = JvmType::from(&signature[index..])
-			}
-		}
-		if result == JvmType::Primitive(JvmPrimitiveType::Invalid) {
-			FatalError::new(FatalErrorType::InvalidMethodDescriptor).call();
-		}
-		return result;
-	}
-
-	pub fn get_parameter_count(&self, cp: &ConstantPool) -> usize {
-		let mut count = 0;
-		if let Constant::Utf8(_, _, _, s) = cp.get_constant_ref(self.descriptor_index as usize) {
-			let signature = s.as_bytes();
-			if signature[0] == '(' as u8 {
-				let mut i = 1;
-				while i < signature.len() && signature[i] != ')' as u8 {
-					if signature[i] == 'L' as u8 {
-						/*
-						 * Lsome/class/name;
-						 * means a reference to a class of that name.
-						 */
-						while signature[i] != ';' as u8 {
-							i = i + 1;
-						}
-					} else if signature[i] == '[' as u8 {
-						i = i + 1;
-					}
-					i = i + 1;
-					count += 1;
-				}
-			}
-		}
-		count
-	}
-
 	pub fn byte_len(&self) -> usize {
 		self.byte_len
 	}
 }
 
-impl<'l> From<&'l Vec<u8>> for Method {
-	fn from(bytes: &'l Vec<u8>) -> Self {
+impl<'l> From<(&'l Vec<u8>, &'l ConstantPool)> for Method {
+	fn from(f: (&'l Vec<u8>, &'l ConstantPool)) -> Self {
+		let (bytes, cp) = f;
 		let mut offset = 0;
 		let access_flags: u16;
 		let name_index: u16;
 		let descriptor_index: u16;
 		let attributes: Attributes;
+		let max_locals: usize;
+		let parameter_count: usize;
+		let return_type: JvmType;
 
 		access_flags = (bytes[offset] as u16) << 8 | (bytes[offset + 1] as u16) << 0;
 		offset += 2;
@@ -136,6 +102,69 @@ impl<'l> From<&'l Vec<u8>> for Method {
 		attributes = Attributes::from(&bytes[offset..].to_vec());
 		offset += attributes.byte_len();
 
+		/*
+		 * Get the number of max locals.
+		 */
+		max_locals = {
+			let mut max_locals: usize = 0;
+			for i in 0..attributes.len() {
+				let attribute = attributes.get_ref(i);
+				if let Constant::Utf8(_, reserved, _, _) =
+					cp.get_constant_ref(attribute.attribute_name_index as usize)
+				{
+					if let Utf8Reserved::Code = reserved {
+						max_locals =
+							u16::from_le_bytes([attribute.info[3], attribute.info[2]]) as usize;
+					}
+				}
+			}
+			max_locals
+		};
+
+		/*
+		 * Get the parameter count.
+		 */
+		parameter_count =
+			if let Constant::Utf8(_, _, _, s) = cp.get_constant_ref(descriptor_index as usize) {
+				let mut parameter_count: usize = 0;
+				let signature = s.as_bytes();
+				if signature[0] == '(' as u8 {
+					let mut i = 1;
+					while i < signature.len() && signature[i] != ')' as u8 {
+						if signature[i] == 'L' as u8 {
+							/*
+							 * Lsome/class/name;
+							 * means a reference to a class of that name.
+							 */
+							while signature[i] != ';' as u8 {
+								i = i + 1;
+							}
+						} else if signature[i] == '[' as u8 {
+							i = i + 1;
+						}
+						i = i + 1;
+						parameter_count += 1;
+					}
+				}
+				parameter_count
+			} else {
+				0
+			};
+
+		/*
+		 * Get the return type.
+		 */
+		return_type = {
+			let mut return_type: JvmType = JvmType::Primitive(JvmPrimitiveType::Invalid);
+			if let Constant::Utf8(_, _, _, s) = cp.get_constant_ref(descriptor_index as usize) {
+				let signature = s.as_bytes();
+				if let Some(index) = s.find(')') {
+					return_type = JvmType::from(&signature[index + 1..])
+				}
+			}
+			return_type
+		};
+
 		Method {
 			byte_len: offset,
 			access_flags,
@@ -143,6 +172,9 @@ impl<'l> From<&'l Vec<u8>> for Method {
 			class_index: 0,
 			descriptor_index,
 			attributes_count: attributes.attributes_count(),
+			max_locals: max_locals,
+			parameter_count: parameter_count,
+			return_type: return_type,
 			attributes,
 		}
 	}
@@ -207,8 +239,9 @@ impl Methods {
 	}
 }
 
-impl<'l> From<&'l Vec<u8>> for Methods {
-	fn from(bytes: &'l Vec<u8>) -> Self {
+impl<'l> From<(&'l Vec<u8>, &'l ConstantPool)> for Methods {
+	fn from(f: (&'l Vec<u8>, &'l ConstantPool)) -> Self {
+		let (bytes, cp) = f;
 		let mut offset = 0;
 		let mut methods: Vec<Method>;
 		let methods_count = (bytes[offset] as u16) << 8 | (bytes[offset + 1] as u16) << 0;
@@ -220,7 +253,7 @@ impl<'l> From<&'l Vec<u8>> for Methods {
 		.take(methods_count as usize)
 		.collect();
 		for method_index in 0..methods_count as usize {
-			methods[method_index] = Method::from(&bytes[offset..].to_vec());
+			methods[method_index] = Method::from((&bytes[offset..].to_vec(), cp));
 			offset += methods[method_index].byte_len();
 		}
 		Methods {

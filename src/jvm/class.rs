@@ -121,7 +121,7 @@ impl Class {
 	}
 
 	fn load_methods(c: &mut Class, offset: usize) -> usize {
-		c.methods = Methods::from(&c.bytes[offset..].to_vec());
+		c.methods = Methods::from((&c.bytes[offset..].to_vec(), &c.constant_pool));
 		c.methods_count = c.methods.methods_count();
 		offset + c.methods.byte_len()
 	}
