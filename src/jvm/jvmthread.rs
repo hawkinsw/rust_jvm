@@ -323,6 +323,26 @@ impl JvmThread {
 				self.execute_aload_x(3, frame);
 				pc_incr = 1;
 			}
+			Some(OperandCode::Astore_0) => {
+				Debug(format!("astore_0"), &self.debug_level, DebugLevel::Info);
+				self.execute_astore_x(0, frame);
+				pc_incr = 1;
+			}
+			Some(OperandCode::Astore_1) => {
+				Debug(format!("astore_1"), &self.debug_level, DebugLevel::Info);
+				self.execute_astore_x(1, frame);
+				pc_incr = 1;
+			}
+			Some(OperandCode::Astore_2) => {
+				Debug(format!("astore_2"), &self.debug_level, DebugLevel::Info);
+				self.execute_astore_x(2, frame);
+				pc_incr = 1;
+			}
+			Some(OperandCode::Astore_3) => {
+				Debug(format!("astore_3"), &self.debug_level, DebugLevel::Info);
+				self.execute_astore_x(3, frame);
+				pc_incr = 1;
+			}
 			Some(OperandCode::Ireturn) => {
 				Debug(format!("ireturn"), &self.debug_level, DebugLevel::Info);
 				return OpcodeResult::Value(frame.operand_stack.pop().unwrap());
@@ -457,7 +477,28 @@ impl JvmThread {
 		}
 	}
 
-	fn execute_aload_x(&mut self, x: usize, frame: &mut Frame) {
+	fn execute_astore_x(&self, x: usize, frame: &mut Frame) {
+		println!("Frame before store: {}\n", frame);
+		if x < frame.locals.len() {
+			if let Some(top) = frame.operand_stack.pop() {
+				if let JvmValue::Reference(rt, reference, access) = top {
+					frame.locals[x] = JvmValue::Reference(rt, reference, access);
+				} else {
+					assert!(false, "Wrong type.");
+				}
+			} else {
+				assert!(false, "Not enough on the top of the stack.");
+			}
+		} else {
+			assert!(
+				false,
+				"Not enough locals available: {}.",
+				frame.locals.len()
+			);
+		}
+	}
+
+	fn execute_aload_x(&self, x: usize, frame: &mut Frame) {
 		if x < frame.locals.len() {
 			if let JvmValue::Reference(_, _, _) = frame.locals[x] {
 				frame.operand_stack.push(frame.locals[x].clone());
