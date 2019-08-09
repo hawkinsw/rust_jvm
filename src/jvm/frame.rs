@@ -53,13 +53,13 @@ impl fmt::Display for Frame {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let mut result: fmt::Result;
 		result = write!(f, "Operand stack:\n");
-		for entry in &self.operand_stack {
-			result = write!(f, "{}\n", entry);
+		for i in 0..self.operand_stack.len() {
+			result = write!(f, "{}: {}\n", i, &self.operand_stack[i]);
 		}
 		result = write!(f, "==============\n");
 		result = write!(f, "Locals:\n");
-		for entry in &self.locals {
-			result = write!(f, "{}\n", entry);
+		for i in 0..self.locals.len() {
+			result = write!(f, "{}: {}\n", i, &self.locals[i]);
 		}
 		result = write!(f, "==============\n");
 
