@@ -50,14 +50,14 @@ impl fmt::Display for JvmPrimitiveType {
 #[derive(Clone)]
 pub enum JvmReferenceType {
 	Array(Rc<JvmValue>, u64),
-	Class(Rc<JvmObject>),
+	Class(String),
 	Interface(String),
 }
 
 #[derive(Clone)]
 pub enum JvmValue {
 	Primitive(JvmPrimitiveType, u64, u16),
-	Reference(JvmReferenceType, u64, u16),
+	Reference(JvmReferenceType, Rc<JvmObject>, u16),
 }
 
 #[derive(Clone)]
@@ -150,7 +150,7 @@ impl PartialEq for JvmValue {
 				_ => false,
 			},
 			JvmValue::Reference(t, v, _) => match other {
-				JvmValue::Reference(ot, ov, _) => ot == t && ov == v,
+				JvmValue::Reference(ot, ov, _) => ot == t && Rc::ptr_eq(ov, v),
 				_ => false,
 			},
 		}
@@ -159,15 +159,30 @@ impl PartialEq for JvmValue {
 
 impl From<&[u8]> for JvmType {
 	fn from(from: &[u8]) -> Self {
+		let mut result = JvmType::Primitive(JvmPrimitiveType::Invalid);
 		if from[0] == 'V' as u8 {
-			JvmType::Primitive(JvmPrimitiveType::Void)
+			result = JvmType::Primitive(JvmPrimitiveType::Void);
 		} else if from[0] == 'I' as u8 {
-			JvmType::Primitive(JvmPrimitiveType::Integer)
+			result = JvmType::Primitive(JvmPrimitiveType::Integer);
 		} else if from[0] == 'Z' as u8 {
-			JvmType::Primitive(JvmPrimitiveType::Boolean)
+			result = JvmType::Primitive(JvmPrimitiveType::Boolean);
+		} else if from[0] == 'L' as u8 {
+			/*
+			 * Walk through the end of the string
+			 * and make that our class name.
+			 */
+			let mut index = 1;
+			while from[index] != ';' as u8 {
+				index = index + 1;
+			}
+			if let Ok(classname) = std::str::from_utf8(&from[1..index]) {
+				result = JvmType::Reference(JvmReferenceType::Class(classname.to_string()))
+			} else {
+				FatalError::new(FatalErrorType::InvalidFieldType('L')).call();
+			}
 		} else {
-			FatalError::new(FatalErrorType::InvalidFieldType).call();
-			JvmType::Primitive(JvmPrimitiveType::Invalid)
+			FatalError::new(FatalErrorType::InvalidFieldType(from[0] as char)).call();
 		}
+		result
 	}
 }
