@@ -59,12 +59,12 @@ enum OpcodeResult {
 	Value(JvmValue),
 }
 
-fn get_method_name_method_type_class_name(
-	index: usize,
+fn resolve_method_ref(
+	method_ref_index: usize,
 	cp: &ConstantPool,
 ) -> Option<(String, String, String)> {
 	let mut result: Option<(String, String, String)> = None;
-	if let Constant::Methodref(_, class_index, method_index) = cp.get_constant_ref(index) {
+	if let Constant::Methodref(_, class_index, method_index) = cp.get_constant_ref(method_ref_index) {
 		if let Constant::Class(_, class_name_index) = cp.get_constant_ref(*class_index as usize) {
 			if let Constant::NameAndType(_, method_name_index, method_type_index) =
 				cp.get_constant_ref(*method_index as usize)
@@ -695,128 +695,118 @@ impl JvmThread {
 		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
 		if let Some((method_name, method_type, invoked_class_name)) =
-			get_method_name_method_type_class_name(method_index, constant_pool)
+			resolve_method_ref(method_index, constant_pool)
 		{
+			let mut invoked_class: Option<Rc<Class>> = None;
+			let mut resolved_method: Option<Rc<Method>> = None;
+
 			Debug(
 				format!("Invoke Special: {}.{}", invoked_class_name, method_name),
 				&self.debug_level,
 				DebugLevel::Info,
 			);
 
-			/*
-			 * We could simplify this if we stored methods inside the
-			 * class as a rcs. That would mean that we'd be able to return
-			 * the class and the method from within the resolve_method
-			 * and not have any copies.
-			 *
-			 * Because we don't do that, we have to resolve the method
-			 * into the class that contains the resolved method and then,
-			 * later, dig into the class and get the method ref.
-			 */
-			let mut invoked_class: Option<Rc<Class>> = None;
 			if let Ok(mut methodarea) = self.methodarea.lock() {
 				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
-				invoked_class = if let Some(invoked_class) = invoked_class {
-					(*methodarea).resolve_method(&class, &invoked_class, &method_name, &method_type)
+				resolved_method = if let Some(invoked_class) = &invoked_class {
+					(*methodarea).resolve_method(
+						&class,
+						&invoked_class,
+						&method_name,
+						&method_type,
+					)
 				} else {
 					None
 				}
 			}
 
-			if let Some(invoked_class) = invoked_class {
-				if let Some(method) = invoked_class.get_methods_ref().get_by_name_and_type(
-					&method_name,
-					&method_type,
-					invoked_class.get_constant_pool_ref(),
-				) {
-					if ((MethodAccessFlags::Protected as u16) & method.access_flags) != 0 {
-						assert!(false, "TODO: Finally, if the resolved method is protected (§4.6), and it is a member of a superclass of the current class, and the method is not declared in the same run-time package (§5.3) as the current class, then the class of objectref must be either the current class or a subclass of the current class.");
-					}
-					/* TODO:
-						Next, the resolved method is selected for invocation unless all of the following conditions are true:
+			if let (Some(invoked_class), Some(resolved_method)) = (invoked_class, resolved_method) {
+				if ((MethodAccessFlags::Protected as u16) & resolved_method.access_flags) != 0 {
+					assert!(false, "TODO: Finally, if the resolved method is protected (§4.6), and it is a member of a superclass of the current class, and the method is not declared in the same run-time package (§5.3) as the current class, then the class of objectref must be either the current class or a subclass of the current class.");
+				}
+				/* TODO:
+					Next, the resolved method is selected for invocation unless all of the following conditions are true:
 
-					   The ACC_SUPER flag (Table 4.1) is set for the current class.
+				   The ACC_SUPER flag (Table 4.1) is set for the current class.
 
-						 The resolved method is not an instance initialization method (§2.9).
-					   ...
+					 The resolved method is not an instance initialization method (§2.9).
+				   ...
+				*/
+
+				if ((ClassAccessFlags::Super as u16) & class.access_flags) != 0
+					&& method_name != "<init>"
+				{
+					/*
+						...
+
+						The class of the resolved method is a superclass of the current class.
+
+						If the above conditions are true, the actual method to be invoked is selected by the following lookup procedure. Let C be the direct superclass of the current class:
+
+						If C contains a declaration for an instance method with the same name and descriptor as the resolved method, then this method will be invoked. The lookup procedure terminates.
+
+						Otherwise, if C has a superclass, this same lookup procedure is performed recursively using the direct superclass of C. The method to be invoked is the result of the recursive invocation of this lookup procedure.
+
+						Otherwise, an AbstractMethodError is raised.
 					*/
+					assert!(false);
+				}
 
-					if ((ClassAccessFlags::Super as u16) & class.access_flags) != 0
-						&& method_name != "<init>"
-					{
-						/*
-							...
+				let mut invoked_frame = Frame::new();
+				invoked_frame.class = Some(Rc::clone(&invoked_class));
 
-							The class of the resolved method is a superclass of the current class.
-
-							If the above conditions are true, the actual method to be invoked is selected by the following lookup procedure. Let C be the direct superclass of the current class:
-
-							If C contains a declaration for an instance method with the same name and descriptor as the resolved method, then this method will be invoked. The lookup procedure terminates.
-
-							Otherwise, if C has a superclass, this same lookup procedure is performed recursively using the direct superclass of C. The method to be invoked is the result of the recursive invocation of this lookup procedure.
-
-							Otherwise, an AbstractMethodError is raised.
-						*/
-						assert!(false);
-					}
-
-					let mut invoked_frame = Frame::new();
-					invoked_frame.class = Some(Rc::clone(&invoked_class));
-
-					/*
-					 * The other parameters are on the stack, too. Move the parameters
-					 * from the source stack to the invoked stack.
-					 */
-					let parameter_count = method.parameter_count;
-					for i in 0..parameter_count {
-						if let Some(parameter) = source_frame.operand_stack.pop() {
-							invoked_frame.locals.insert(0, parameter);
-						} else {
-							FatalError::new(FatalErrorType::NotEnough(
-								"invokespecial".to_string(),
-								i,
-								"stack operands".to_string(),
-							))
-							.call();
-						}
-					}
-					/*
-					 * The first value on the stack is an object reference. It becomes
-					 * the 0th local variable to the special method.
-					 */
-					if let Some(top) = source_frame.operand_stack.pop() {
-						if let JvmValue::Reference(_, _, _) = top {
-							invoked_frame.locals.insert(0, top);
-						} else {
-							/*
-							 * TODO: Check that the first value on the stack is a reference.
-							 */
-						}
-					}
-
-					Debug(
-						format!("Parameter count: {}", parameter_count),
-						&self.debug_level,
-						DebugLevel::Info,
-					);
-					Debug(
-						format!("invoked_frame: {}", invoked_frame),
-						&self.debug_level,
-						DebugLevel::Info,
-					);
-
-					if let Some(v) = self.execute_method(&method, invoked_frame) {
-						Debug(
-							format!("Returning from a method: {}", method.clone()),
-							&self.debug_level,
-							DebugLevel::Info,
-						);
-						return Some(OpcodeResult::Value(v));
+				/*
+				 * The other parameters are on the stack, too. Move the parameters
+				 * from the source stack to the invoked stack.
+				 */
+				let parameter_count = resolved_method.parameter_count;
+				for i in 0..parameter_count {
+					if let Some(parameter) = source_frame.operand_stack.pop() {
+						invoked_frame.locals.insert(0, parameter);
+					} else {
+						FatalError::new(FatalErrorType::NotEnough(
+							"invokespecial".to_string(),
+							i,
+							"stack operands".to_string(),
+						))
+						.call();
 					}
 				}
-			} else {
-				FatalError::new(FatalErrorType::ClassNotFound(invoked_class_name.clone())).call()
+				/*
+				 * The first value on the stack is an object reference. It becomes
+				 * the 0th local variable to the special method.
+				 */
+				if let Some(top) = source_frame.operand_stack.pop() {
+					if let JvmValue::Reference(_, _, _) = top {
+						invoked_frame.locals.insert(0, top);
+					} else {
+						/*
+						 * TODO: Check that the first value on the stack is a reference.
+						 */
+					}
+				}
+
+				Debug(
+					format!("Parameter count: {}", parameter_count),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				Debug(
+					format!("invoked_frame: {}", invoked_frame),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+
+				if let Some(v) = self.execute_method(&resolved_method, invoked_frame) {
+					Debug(
+						format!("Returning from a method: {}", resolved_method.clone()),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					return Some(OpcodeResult::Value(v));
+				}
 			}
+			FatalError::new(FatalErrorType::ClassNotFound(invoked_class_name.clone())).call()
 		}
 		None
 	}
@@ -831,7 +821,7 @@ impl JvmThread {
 		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
 		if let Some((method_name, method_type, invoked_class_name)) =
-			get_method_name_method_type_class_name(method_index, constant_pool)
+			resolve_method_ref(method_index, constant_pool)
 		{
 			Debug(
 				format!("Invoke Static: {}.{}", invoked_class_name, method_name),

@@ -22,6 +22,7 @@
 use jvm::class::Class;
 use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
+use jvm::method::Method;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -96,9 +97,9 @@ impl MethodArea {
 		invoked_class: &Rc<Class>,
 		method_name: &String,
 		method_type: &String,
-	) -> Option<Rc<Class>> {
+	) -> Option<Rc<Method>> {
 		let mut target_class = invoked_class;
-		let mut result: Option<Rc<Class>> = None;
+		let mut result: Option<Rc<Method>> = None;
 
 		/*
 		 * TODO: Check whether class is an interface. This is an
@@ -120,7 +121,7 @@ impl MethodArea {
 			 * descriptor specified by the method reference, method
 			 * lookup succeeds.
 			 */
-			if let Some(_) = target_class.get_methods_ref().get_by_name_and_type(
+			if let Some(target_method) = target_class.get_methods_ref().get_by_name_and_type(
 				method_name,
 				method_type,
 				target_class.get_constant_pool_ref(),
@@ -135,7 +136,7 @@ impl MethodArea {
 					DebugLevel::Info,
 				);
 
-				result = Some(Rc::clone(&target_class));
+				result = Some(Rc::clone(&target_method));
 				false /* this will break the loop */
 			} else {
 				/*
