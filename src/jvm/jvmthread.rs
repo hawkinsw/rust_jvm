@@ -168,7 +168,7 @@ impl JvmThread {
 			self.execute_clinit(&main_class, class_name);
 
 			if let Some(main_method) = main_class
-				.get_method_ref_by_name_and_type(method_name, &"([Ljava/lang/String;)V".to_string())
+				.get_method_rc_by_name_and_type(method_name, &"([Ljava/lang/String;)V".to_string())
 			{
 				if main_method.access_flags
 					!= ((MethodAccessFlags::Public as u16) | (MethodAccessFlags::Static as u16))
@@ -193,7 +193,7 @@ impl JvmThread {
 					DebugLevel::Info,
 				);
 
-				if let Some(v) = self.execute_method(main_method, frame) {
+				if let Some(v) = self.execute_method(&main_method, frame) {
 					if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0) != v {
 						FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
 					}
@@ -602,7 +602,7 @@ impl JvmThread {
 						DebugLevel::Info,
 					);
 
-					if let Some(v) = self.execute_method(clinit_method, clinit_frame) {
+					if let Some(v) = self.execute_method(&clinit_method, clinit_frame) {
 						if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0) != v {
 							FatalError::new(FatalErrorType::ClassInitMethodReturnedValue).call();
 						}

@@ -29,6 +29,7 @@ use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmType;
 use std::fmt;
 use std::iter::repeat;
+use std::rc::Rc;
 
 #[repr(u16)]
 pub enum MethodAccessFlags {
@@ -194,16 +195,16 @@ impl fmt::Display for Method {
 #[derive(Clone, Default)]
 pub struct Methods {
 	byte_len: usize,
-	methods: Vec<Method>,
+	methods: Vec<Rc<Method>>,
 }
 
 impl Methods {
 	pub fn set(&mut self, index: usize, method: Method) {
-		self.methods[index] = method;
+		self.methods[index] = Rc::new(method);
 	}
 
-	pub fn get(&self, index: usize) -> &Method {
-		&self.methods[index]
+	pub fn get(&self, index: usize) -> Rc<Method> {
+		Rc::clone(&self.methods[index])
 	}
 
 	pub fn methods_count(&self) -> u16 {
@@ -219,7 +220,7 @@ impl Methods {
 		method_name: &String,
 		method_type: &String,
 		cp: &ConstantPool,
-	) -> Option<&Method> {
+	) -> Option<Rc<Method>> {
 		for i in 0..self.methods.len() {
 			if let Constant::Utf8(_, _, _, value) =
 				cp.get_constant_ref(self.methods[i].name_index as usize)
@@ -229,7 +230,7 @@ impl Methods {
 						cp.get_constant_ref(self.methods[i].descriptor_index as usize)
 					{
 						if *value == *method_type {
-							return Some(&self.methods[i]);
+							return Some(self.get(i));
 						}
 					}
 				}
@@ -243,17 +244,16 @@ impl<'l> From<(&'l Vec<u8>, &'l ConstantPool)> for Methods {
 	fn from(f: (&'l Vec<u8>, &'l ConstantPool)) -> Self {
 		let (bytes, cp) = f;
 		let mut offset = 0;
-		let mut methods: Vec<Method>;
+		let mut methods: Vec<Rc<Method>> = Vec::new();
 		let methods_count = (bytes[offset] as u16) << 8 | (bytes[offset + 1] as u16) << 0;
 
 		offset += 2;
-		methods = repeat(Method {
-			..Default::default()
-		})
-		.take(methods_count as usize)
-		.collect();
 		for method_index in 0..methods_count as usize {
-			methods[method_index] = Method::from((&bytes[offset..].to_vec(), cp));
+			/*
+			 * Add a new reference-counted method to the list of
+			 * methods.
+			 */
+			methods.push(Rc::new(Method::from((&bytes[offset..].to_vec(), cp))));
 			offset += methods[method_index].byte_len();
 		}
 		Methods {
@@ -290,13 +290,13 @@ impl<'a> MethodIterator<'a> {
 	}
 }
 
-impl<'a> Iterator for MethodIterator<'a> {
-	type Item = &'a Method;
+impl Iterator for MethodIterator<'_> {
+	type Item = Rc<Method>;
 
-	fn next(&mut self) -> Option<&'a Method> {
+	fn next(&mut self) -> Option<Rc<Method>> {
 		if self.curr < self.max {
 			self.curr += 1;
-			Some(self.methods.get(self.curr - 1))
+			Some(Rc::clone(&self.methods.get(self.curr - 1)))
 		} else {
 			None
 		}

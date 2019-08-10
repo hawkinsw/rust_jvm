@@ -29,6 +29,7 @@ use std::fmt;
 use std::fs;
 use std::io::Read;
 use std::iter;
+use std::rc::Rc;
 
 #[repr(u16)]
 pub enum ClassAccessFlags {
@@ -68,11 +69,11 @@ impl Class {
 		&self.constant_pool
 	}
 
-	pub fn get_method_ref_by_name_and_type(
+	pub fn get_method_rc_by_name_and_type(
 		&self,
 		method_name: &String,
 		method_type: &String,
-	) -> Option<&Method> {
+	) -> Option<Rc<Method>> {
 		self.methods
 			.get_by_name_and_type(&method_name, &method_type, &self.constant_pool)
 	}
