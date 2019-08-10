@@ -650,10 +650,10 @@ impl JvmThread {
 							Debug(format!("{}", object), &self.debug_level, DebugLevel::Info);
 							object.instantiate();
 							result = Some(JvmValue::Reference(
-								JvmReferenceType::Class(Rc::new(object)),
+								JvmReferenceType::Class(instantiated_class_name.to_string()),
+								Rc::new(object),
 								0,
-								0,
-							))
+							));
 						} else {
 							FatalError::new(FatalErrorType::ClassNotLoaded(
 								instantiated_class_name.to_string(),
