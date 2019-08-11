@@ -59,39 +59,6 @@ enum OpcodeResult {
 	Value(JvmValue),
 }
 
-fn resolve_method_ref(
-	method_ref_index: usize,
-	cp: &ConstantPool,
-) -> Option<(String, String, String)> {
-	let mut result: Option<(String, String, String)> = None;
-	if let Constant::Methodref(_, class_index, method_index) = cp.get_constant_ref(method_ref_index) {
-		if let Constant::Class(_, class_name_index) = cp.get_constant_ref(*class_index as usize) {
-			if let Constant::NameAndType(_, method_name_index, method_type_index) =
-				cp.get_constant_ref(*method_index as usize)
-			{
-				if let Constant::Utf8(_, _, _, class_name) =
-					cp.get_constant_ref(*class_name_index as usize)
-				{
-					if let Constant::Utf8(_, _, _, method_name) =
-						cp.get_constant_ref(*method_name_index as usize)
-					{
-						if let Constant::Utf8(_, _, _, method_type) =
-							cp.get_constant_ref(*method_type_index as usize)
-						{
-							result = Some((
-								method_name.to_string(),
-								method_type.to_string(),
-								class_name.to_string(),
-							));
-						}
-					}
-				}
-			}
-		}
-	}
-	result
-}
-
 impl JvmThread {
 	pub fn new(debug_level: DebugLevel, methodarea: Arc<Mutex<MethodArea>>) -> Self {
 		JvmThread {
@@ -695,7 +662,7 @@ impl JvmThread {
 		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
 		if let Some((method_name, method_type, invoked_class_name)) =
-			resolve_method_ref(method_index, constant_pool)
+			class.resolve_method_ref(method_index)
 		{
 			let mut invoked_class: Option<Rc<Class>> = None;
 			let mut resolved_method: Option<Rc<Method>> = None;
@@ -821,7 +788,7 @@ impl JvmThread {
 		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
 		if let Some((method_name, method_type, invoked_class_name)) =
-			resolve_method_ref(method_index, constant_pool)
+			class.resolve_method_ref(method_index)
 		{
 			Debug(
 				format!("Invoke Static: {}.{}", invoked_class_name, method_name),

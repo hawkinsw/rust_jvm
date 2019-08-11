@@ -69,6 +69,48 @@ impl Class {
 		&self.constant_pool
 	}
 
+	/// Resolve a method reference into the name of method, the type of
+	/// the method and the class of the method.
+	///
+	/// # Arguments
+	///
+	/// `method_ref_index` - The index into this class' constant pool
+	/// that points to a method reference.
+	pub fn resolve_method_ref(&self, method_ref_index: usize) -> Option<(String, String, String)> {
+		let mut result: Option<(String, String, String)> = None;
+		let cp = &self.constant_pool;
+
+		if let Constant::Methodref(_, class_index, method_index) =
+			cp.get_constant_ref(method_ref_index)
+		{
+			if let Constant::Class(_, class_name_index) = cp.get_constant_ref(*class_index as usize)
+			{
+				if let Constant::NameAndType(_, method_name_index, method_type_index) =
+					cp.get_constant_ref(*method_index as usize)
+				{
+					if let Constant::Utf8(_, _, _, class_name) =
+						cp.get_constant_ref(*class_name_index as usize)
+					{
+						if let Constant::Utf8(_, _, _, method_name) =
+							cp.get_constant_ref(*method_name_index as usize)
+						{
+							if let Constant::Utf8(_, _, _, method_type) =
+								cp.get_constant_ref(*method_type_index as usize)
+							{
+								result = Some((
+									method_name.to_string(),
+									method_type.to_string(),
+									class_name.to_string(),
+								));
+							}
+						}
+					}
+				}
+			}
+		}
+		result
+	}
+
 	pub fn get_method_rc_by_name_and_type(
 		&self,
 		method_name: &String,
