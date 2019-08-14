@@ -9,6 +9,7 @@ pub enum FatalErrorType {
 	WrongType(String, String),
 	NotEnough(String, usize, String),
 	MethodResolutionFailed,
+	MethodSelectionFailed,
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
 	InvalidFieldType(char),
@@ -16,6 +17,7 @@ pub enum FatalErrorType {
 	InvalidConstantReference(String, String, u16),
 	VoidMethodReturnedValue,
 	ClassInitMethodReturnedValue,
+	MethodExecutionFailed(String),
 }
 
 impl fmt::Display for FatalErrorType {
@@ -45,6 +47,7 @@ impl fmt::Display for FatalErrorType {
 				write!(f, "{} needs {} {}.", instruction, needed, from)
 			}
 			FatalErrorType::MethodResolutionFailed => write!(f, "Method resolution failed!"),
+			FatalErrorType::MethodSelectionFailed => write!(f, "Method resolution failed!"),
 			FatalErrorType::MainMethodNotPublicStatic => {
 				write!(f, "Main method is not public or not static.")
 			}
@@ -58,6 +61,9 @@ impl fmt::Display for FatalErrorType {
 				index, class, expected
 			),
 			FatalErrorType::InvalidFieldType(field) => write!(f, "Invalid field type: {}.", field),
+			FatalErrorType::MethodExecutionFailed(method) => {
+				write!(f, "Method {} failed to execute.", method)
+			}
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
 	}

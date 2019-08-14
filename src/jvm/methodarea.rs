@@ -23,6 +23,7 @@ use jvm::class::Class;
 use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
 use jvm::method::Method;
+use jvm::method::MethodAccessFlags;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -87,10 +88,79 @@ impl MethodArea {
 		}
 	}
 
-	/*
-	 * TODO: We cannot test this (really) until we implement
-	 * invoke virtual.
-	 */
+	pub fn select_method(
+		&mut self,
+		invoked_class: &Rc<Class>,
+		method_name: &String,
+		method_type: &String,
+	) -> Option<(Rc<Class>, Rc<Method>)> {
+		let mut target_class = Rc::clone(invoked_class);
+		let mut result: Option<(Rc<Class>, Rc<Method>)> = None;
+
+		while {
+			if let Some(target_method) = target_class.get_methods_ref().get_by_name_and_type(
+				method_name,
+				method_type,
+				target_class.get_constant_pool_ref(),
+			) {
+				if (target_method.access_flags & (MethodAccessFlags::Private as u16) == 0)
+					&& ((target_method.access_flags & (MethodAccessFlags::Public as u16) != 0)
+						|| (target_method.access_flags & (MethodAccessFlags::Protected as u16)
+							!= 0) || false/* TODO: mA is marked neither ACC_PUBLIC nor ACC_PROTECTED nor ACC_PRIVATE, and either (a) the declaration of mA appears in the same run-time package as the declaration of mC, or (b) if mA is declared in a class A and mC is declared in a class C, then there exists a method mB declared in a class B such that C is a subclass of B and B is a subclass of A and mC can override mB and mB can override mA. */)
+				{
+					Debug(
+						format!(
+							"Method {} selected to {}.",
+							method_name,
+							target_class.get_class_name().unwrap()
+						),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					result = Some((target_class.clone(), target_method));
+				}
+			}
+
+			/*
+			 * If we did not find a result (either because it doesn't exist or
+			 * because it did not qualify as an override), then we are going
+			 * to set ourselves up to look in the superclass.
+			 */
+			match result {
+				None => {
+					let mut traversed_to_superclass = false;
+					if let Some(superclass_name) = target_class.resolve_superclass() {
+						if let Some(superclass) = self.get_class_rc(&superclass_name) {
+							target_class = superclass;
+							traversed_to_superclass = true;
+						}
+					} else {
+						/*
+						 * TODO: We walked to the top of the class hierarchy
+						 * and couldn't find a method. This will not happen because
+						 * we already resolved a method that the compiler guaranteed
+						 * is somewhere in the hierarchy and we are now just looking
+						 * for something that overrides it. So, it is a fatal error.
+						 */
+					}
+					traversed_to_superclass
+				}
+				_ => false,
+			}
+		} {}
+
+		/*
+		 * If we didn't find anything there, then let's look in
+		 * the superinterfaces:
+		 * Otherwise, the maximally-specific superinterface methods of C are determined (§5.4.3.3). If exactly one matches mR's name and descriptor and is not abstract, then it is the selected method.
+		 */
+		match result {
+			None => assert!(false, "TODO: Look in the superinterfaces."),
+			_ => {}
+		}
+		result
+	}
+
 	pub fn resolve_method(
 		&mut self,
 		invoking_class: &Rc<Class>,
@@ -136,7 +206,7 @@ impl MethodArea {
 					DebugLevel::Info,
 				);
 
-				result = Some(Rc::clone(&target_method));
+				result = Some(target_method);
 				false /* this will break the loop */
 			} else {
 				/*

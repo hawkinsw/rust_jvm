@@ -44,6 +44,7 @@ enum_from_primitive! {
 		Astore_3 = 0x4e,
 		Ireturn = 0xac,
 		r#Return = 0xb1,
+		Invokevirtual = 0xb6,
 		Invokespecial = 0xb7,
 		Invokestatic = 0xb8,
 		New = 0xbb,

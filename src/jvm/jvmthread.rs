@@ -59,6 +59,21 @@ enum OpcodeResult {
 	Value(JvmValue),
 }
 
+pub fn move_parameters_to_locals(
+	method: &Method,
+	invoking_frame: &mut Frame,
+	invoked_frame: &mut Frame,
+) -> bool {
+	for i in 0..method.parameter_count {
+		if let Some(parameter) = invoking_frame.operand_stack.pop() {
+			invoked_frame.locals.insert(0, parameter);
+		} else {
+			return false;
+		}
+	}
+	true
+}
+
 impl JvmThread {
 	pub fn new(debug_level: DebugLevel, methodarea: Arc<Mutex<MethodArea>>) -> Self {
 		JvmThread {
@@ -336,6 +351,21 @@ impl JvmThread {
 				Debug(format!("return"), &self.debug_level, DebugLevel::Info);
 				return OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0));
 			}
+			Some(OperandCode::Invokevirtual) => {
+				Debug(
+					format!("invokevirtual"),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				/*
+				 * Start by assuming failure.
+				 */
+				pc_incr = 0;
+
+				let invokevirtual_result = self.execute_invokevirtual(bytes, frame);
+				pc_incr = self.handle_invoke_result(invokevirtual_result, frame, 3);
+			}
+
 			Some(OperandCode::Invokespecial) => {
 				Debug(
 					format!("invokespecial"),
@@ -652,6 +682,125 @@ impl JvmThread {
 		}
 	}
 
+	fn execute_invokevirtual(
+		&mut self,
+		bytes: &[u8],
+		source_frame: &mut Frame,
+	) -> Option<OpcodeResult> {
+		let class = source_frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
+		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
+
+		if let Some((method_name, method_type, invoked_class_name)) =
+			class.resolve_method_ref(method_index)
+		{
+			let mut invoked_class: Option<Rc<Class>> = None;
+			let mut resolved_method: Option<Rc<Method>> = None;
+			let mut invoked_frame: Frame = Frame::new();
+
+			Debug(
+				format!("Invoke Virtual: {}.{}", invoked_class_name, method_name),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
+
+			if let Ok(mut methodarea) = self.methodarea.lock() {
+				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
+				resolved_method = if let Some(invoked_class) = &invoked_class {
+					(*methodarea).resolve_method(&class, &invoked_class, &method_name, &method_type)
+				} else {
+					None
+				};
+			}
+
+			if let (Some(invoked_class), Some(resolved_method)) = (invoked_class, resolved_method) {
+				let mut object_class_name: Option<String> = None;
+
+				/*
+				 * Let's build a frame!
+				 */
+				if !move_parameters_to_locals(&resolved_method, source_frame, &mut invoked_frame) {
+					FatalError::new(FatalErrorType::NotEnough(
+						"invokevirtual".to_string(),
+						resolved_method.parameter_count,
+						"stack operands".to_string(),
+					))
+					.call();
+				}
+				/*
+				 * The first value on the stack is an object reference. It becomes
+				 * the 0th local variable to the special method.
+				 */
+				if let Some(top) = source_frame.operand_stack.pop() {
+					if let JvmValue::Reference(JvmReferenceType::Class(ocn), _, _) = &top {
+						object_class_name = Some(ocn.to_string());
+						invoked_frame.locals.insert(0, top);
+					} else {
+						/*
+						 * TODO: This is a fatal error: The first value on
+						 * the stack at this point must be a reference.
+						 */
+					}
+				}
+
+				/*
+				 * Check to see if the resolved method is private. If so, it's the one
+				 * that we invoke.
+				 */
+				if ((MethodAccessFlags::Protected as u16) & resolved_method.access_flags) != 0 {
+					invoked_frame.class = Some(invoked_class);
+					if let Some(v) = self.execute_method(&resolved_method, invoked_frame) {
+						Debug(
+							format!("Returning from a method: {}", resolved_method.clone()),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+						return Some(OpcodeResult::Value(v));
+					} else {
+						FatalError::new(FatalErrorType::MethodExecutionFailed(method_name)).call();
+					}
+				} else if let Some(object_class_name) = object_class_name {
+					let mut selected_class_method: Option<(Rc<Class>, Rc<Method>)> = None;
+					let mut object_class: Option<Rc<Class>> = None;
+
+					if let Ok(mut methodarea) = self.methodarea.lock() {
+						object_class = (*methodarea).get_class_rc(&object_class_name);
+						selected_class_method = if let Some(object_class) = &object_class {
+							(*methodarea).select_method(&object_class, &method_name, &method_type)
+						} else {
+							FatalError::new(FatalErrorType::MethodSelectionFailed).call();
+							None
+						};
+					}
+
+					if let Some((selected_class, selected_method)) = selected_class_method {
+						invoked_frame.class = Some(selected_class);
+						if let Some(v) = self.execute_method(&selected_method, invoked_frame) {
+							Debug(
+								format!("Returning from a method: {}", resolved_method.clone()),
+								&self.debug_level,
+								DebugLevel::Info,
+							);
+							return Some(OpcodeResult::Value(v));
+						} else {
+							FatalError::new(FatalErrorType::MethodExecutionFailed(method_name))
+								.call();
+							assert!(false);
+						}
+					}
+				} else {
+					FatalError::new(FatalErrorType::MethodExecutionFailed(method_name)).call();
+				}
+			}
+			/*
+			 * TODO: This is a fatal error, but I'm not sure exactly
+			 * how to qualify it.
+			 */
+		}
+		FatalError::new(FatalErrorType::MethodResolutionFailed).call();
+		None
+	}
+
 	fn execute_invokespecial(
 		&mut self,
 		bytes: &[u8],
@@ -676,12 +825,7 @@ impl JvmThread {
 			if let Ok(mut methodarea) = self.methodarea.lock() {
 				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
 				resolved_method = if let Some(invoked_class) = &invoked_class {
-					(*methodarea).resolve_method(
-						&class,
-						&invoked_class,
-						&method_name,
-						&method_type,
-					)
+					(*methodarea).resolve_method(&class, &invoked_class, &method_name, &method_type)
 				} else {
 					None
 				}
@@ -726,18 +870,13 @@ impl JvmThread {
 				 * The other parameters are on the stack, too. Move the parameters
 				 * from the source stack to the invoked stack.
 				 */
-				let parameter_count = resolved_method.parameter_count;
-				for i in 0..parameter_count {
-					if let Some(parameter) = source_frame.operand_stack.pop() {
-						invoked_frame.locals.insert(0, parameter);
-					} else {
-						FatalError::new(FatalErrorType::NotEnough(
-							"invokespecial".to_string(),
-							i,
-							"stack operands".to_string(),
-						))
-						.call();
-					}
+				if !move_parameters_to_locals(&resolved_method, source_frame, &mut invoked_frame) {
+					FatalError::new(FatalErrorType::NotEnough(
+						"invokespecial".to_string(),
+						resolved_method.parameter_count,
+						"stack operands".to_string(),
+					))
+					.call();
 				}
 				/*
 				 * The first value on the stack is an object reference. It becomes
@@ -748,13 +887,14 @@ impl JvmThread {
 						invoked_frame.locals.insert(0, top);
 					} else {
 						/*
-						 * TODO: Check that the first value on the stack is a reference.
+						 * TODO: This is a fatal error: The first value on
+						 * the stack at this point must be a reference.
 						 */
 					}
 				}
 
 				Debug(
-					format!("Parameter count: {}", parameter_count),
+					format!("Parameter count: {}", resolved_method.parameter_count),
 					&self.debug_level,
 					DebugLevel::Info,
 				);
@@ -771,10 +911,13 @@ impl JvmThread {
 						DebugLevel::Info,
 					);
 					return Some(OpcodeResult::Value(v));
+				} else {
+					FatalError::new(FatalErrorType::MethodExecutionFailed(method_name)).call();
 				}
 			}
 			FatalError::new(FatalErrorType::ClassNotFound(invoked_class_name.clone())).call()
 		}
+		FatalError::new(FatalErrorType::MethodResolutionFailed).call();
 		None
 	}
 

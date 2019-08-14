@@ -69,6 +69,22 @@ impl Class {
 		&self.constant_pool
 	}
 
+	pub fn resolve_superclass(&self) -> Option<String> {
+		let mut superclass_name: Option<String> = None;
+		let cp = &self.constant_pool;
+
+		if let Constant::Class(_, superclassname_index) =
+			cp.get_constant_ref(self.super_class as usize)
+		{
+			if let Constant::Utf8(_, _, _, superclassname_value) =
+				cp.get_constant_ref(*superclassname_index as usize)
+			{
+				superclass_name = Some(superclassname_value.to_string());
+			}
+		}
+		superclass_name
+	}
+
 	/// Resolve a method reference into the name of method, the type of
 	/// the method and the class of the method.
 	///
