@@ -283,6 +283,15 @@ impl JvmThread {
 				self.execute_iconst_x(5, frame);
 				pc_incr = 1;
 			}
+			Some(OperandCode::Bipush) => {
+				Debug(format!("bipush"), &self.debug_level, DebugLevel::Info);
+				frame.operand_stack.push(JvmValue::Primitive(
+					JvmPrimitiveType::Integer,
+					bytes[1] as u64,
+					0,
+				));
+				pc_incr = 2;
+			}
 			Some(OperandCode::Iload_0) => {
 				Debug(format!("iload_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(0, frame);
