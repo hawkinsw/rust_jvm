@@ -47,14 +47,15 @@ enum_from_primitive! {
 		Astore_1 = 0x4c,
 		Astore_2 = 0x4d,
 		Astore_3 = 0x4e,
+		Pop = 0x57,
+		Dup = 0x59,
+		Iadd = 0x60,
+		Imul = 0x68,
 		Ireturn = 0xac,
 		r#Return = 0xb1,
 		Invokevirtual = 0xb6,
 		Invokespecial = 0xb7,
 		Invokestatic = 0xb8,
 		New = 0xbb,
-		Pop = 0x57,
-		Dup = 0x59,
-		Iadd = 0x60,
 	}
 }

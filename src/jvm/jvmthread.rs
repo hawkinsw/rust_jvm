@@ -372,6 +372,32 @@ impl JvmThread {
 				self.execute_astore_x(3, frame);
 				pc_incr = 1;
 			}
+			Some(OperandCode::Pop) => {
+				Debug(format!("pop"), &self.debug_level, DebugLevel::Info);
+				frame.operand_stack.pop();
+				pc_incr = 1;
+			}
+			Some(OperandCode::Dup) => {
+				Debug(format!("dup"), &self.debug_level, DebugLevel::Info);
+				/*
+				 * TODO: The type on the stack must be a "category 1
+				 * computational type."
+				 */
+				if let Some(top) = frame.operand_stack.last() {
+					frame.operand_stack.push(top.clone());
+				}
+				pc_incr = 1;
+			}
+			Some(OperandCode::Iadd) => {
+				Debug(format!("iadd"), &self.debug_level, DebugLevel::Info);
+				self.execute_iadd(frame);
+				pc_incr = 1;
+			}
+			Some(OperandCode::Imul) => {
+				Debug(format!("imul"), &self.debug_level, DebugLevel::Info);
+				self.execute_imul(frame);
+				pc_incr = 1;
+			}
 			Some(OperandCode::Ireturn) => {
 				Debug(format!("ireturn"), &self.debug_level, DebugLevel::Info);
 				return OpcodeResult::Value(frame.operand_stack.pop().unwrap());
@@ -394,7 +420,6 @@ impl JvmThread {
 				let invokevirtual_result = self.execute_invokevirtual(bytes, frame);
 				pc_incr = self.handle_invoke_result(invokevirtual_result, frame, 3);
 			}
-
 			Some(OperandCode::Invokespecial) => {
 				Debug(
 					format!("invokespecial"),
@@ -430,27 +455,6 @@ impl JvmThread {
 					);
 				}
 				pc_incr = 3;
-			}
-			Some(OperandCode::Pop) => {
-				Debug(format!("pop"), &self.debug_level, DebugLevel::Info);
-				frame.operand_stack.pop();
-				pc_incr = 1;
-			}
-			Some(OperandCode::Dup) => {
-				Debug(format!("dup"), &self.debug_level, DebugLevel::Info);
-				/*
-				 * TODO: The type on the stack must be a "category 1
-				 * computational type."
-				 */
-				if let Some(top) = frame.operand_stack.last() {
-					frame.operand_stack.push(top.clone());
-				}
-				pc_incr = 1;
-			}
-			Some(OperandCode::Iadd) => {
-				Debug(format!("iadd"), &self.debug_level, DebugLevel::Info);
-				self.execute_iadd(frame);
-				pc_incr = 1;
 			}
 			_ => {
 				assert!(false, "Unrecognized opcode: 0x{:x}", opcode);
@@ -515,6 +519,21 @@ impl JvmThread {
 				frame.operand_stack.push(JvmValue::Primitive(
 					JvmPrimitiveType::Integer,
 					op1 + op2,
+					0,
+				));
+			}
+		}
+	}
+	fn execute_imul(&mut self, frame: &mut Frame) {
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op1, _)) =
+			frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op2, _)) =
+				frame.operand_stack.pop()
+			{
+				frame.operand_stack.push(JvmValue::Primitive(
+					JvmPrimitiveType::Integer,
+					op1 * op2,
 					0,
 				));
 			}
