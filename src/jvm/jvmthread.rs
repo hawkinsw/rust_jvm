@@ -242,7 +242,6 @@ impl JvmThread {
 	}
 
 	fn execute_opcode(&mut self, bytes: &[u8], frame: &mut Frame) -> OpcodeResult {
-		let mut pc_incr: usize;
 		let class = frame.class().unwrap();
 		let constant_pool = class.get_constant_pool_ref();
 
@@ -256,37 +255,37 @@ impl JvmThread {
 			Some(OperandCode::Iconst_m1) => {
 				Debug(format!("iconst_m1"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(-1, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iconst_0) => {
 				Debug(format!("iconst_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(0, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iconst_1) => {
 				Debug(format!("iconst_1"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(1, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iconst_2) => {
 				Debug(format!("iconst_2"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(2, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iconst_3) => {
 				Debug(format!("iconst_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(3, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iconst_4) => {
 				Debug(format!("iconst_4"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(4, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iconst_5) => {
 				Debug(format!("iconst_5"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(5, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Bipush) => {
 				Debug(format!("bipush"), &self.debug_level, DebugLevel::Info);
@@ -295,92 +294,92 @@ impl JvmThread {
 					bytes[1] as u64,
 					0,
 				));
-				pc_incr = 2;
+				OpcodeResult::Incr(2)
 			}
 			Some(OperandCode::Iload_0) => {
 				Debug(format!("iload_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(0, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iload_1) => {
 				Debug(format!("iload_1"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(1, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iload_2) => {
 				Debug(format!("iload_2"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(2, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iload_3) => {
 				Debug(format!("iload_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(3, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Aload_0) => {
 				Debug(format!("aload_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_aload_x(0, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Aload_1) => {
 				Debug(format!("aload_1"), &self.debug_level, DebugLevel::Info);
 				self.execute_aload_x(1, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Aload_2) => {
 				Debug(format!("aload_2"), &self.debug_level, DebugLevel::Info);
 				self.execute_aload_x(2, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Aload_3) => {
 				Debug(format!("aload_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_aload_x(3, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Istore_0) => {
 				Debug(format!("istore_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_istore_x(0, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Istore_1) => {
 				Debug(format!("istore_1"), &self.debug_level, DebugLevel::Info);
 				self.execute_istore_x(1, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Istore_2) => {
 				Debug(format!("istore_2"), &self.debug_level, DebugLevel::Info);
 				self.execute_istore_x(2, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Istore_3) => {
 				Debug(format!("istore_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_istore_x(3, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Astore_0) => {
 				Debug(format!("astore_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_astore_x(0, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Astore_1) => {
 				Debug(format!("astore_1"), &self.debug_level, DebugLevel::Info);
 				self.execute_astore_x(1, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Astore_2) => {
 				Debug(format!("astore_2"), &self.debug_level, DebugLevel::Info);
 				self.execute_astore_x(2, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Astore_3) => {
 				Debug(format!("astore_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_astore_x(3, frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Pop) => {
 				Debug(format!("pop"), &self.debug_level, DebugLevel::Info);
 				frame.operand_stack.pop();
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Dup) => {
 				Debug(format!("dup"), &self.debug_level, DebugLevel::Info);
@@ -391,12 +390,12 @@ impl JvmThread {
 				if let Some(top) = frame.operand_stack.last() {
 					frame.operand_stack.push(top.clone());
 				}
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Iadd) => {
 				Debug(format!("iadd"), &self.debug_level, DebugLevel::Info);
 				self.execute_iadd(frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Imul) => {
 				Debug(format!("imul"), &self.debug_level, DebugLevel::Info);
@@ -415,11 +414,11 @@ impl JvmThread {
 			}
 			Some(OperandCode::Ireturn) => {
 				Debug(format!("ireturn"), &self.debug_level, DebugLevel::Info);
-				return OpcodeResult::Value(frame.operand_stack.pop().unwrap());
+				OpcodeResult::Value(frame.operand_stack.pop().unwrap())
 			}
 			Some(OperandCode::r#Return) => {
 				Debug(format!("return"), &self.debug_level, DebugLevel::Info);
-				return OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0));
+				OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0))
 			}
 			Some(OperandCode::Invokevirtual) => {
 				Debug(
@@ -430,10 +429,11 @@ impl JvmThread {
 				/*
 				 * Start by assuming failure.
 				 */
-				pc_incr = 0;
+				let mut pc_incr: usize = 0;
 
 				let invokevirtual_result = self.execute_invokevirtual(bytes, frame);
 				pc_incr = self.handle_invoke_result(invokevirtual_result, frame, 3);
+				OpcodeResult::Incr(pc_incr)
 			}
 			Some(OperandCode::Invokespecial) => {
 				Debug(
@@ -444,20 +444,22 @@ impl JvmThread {
 				/*
 				 * Start by assuming failure.
 				 */
-				pc_incr = 0;
+				let mut pc_incr: usize = 0;
 
 				let invokespecial_result = self.execute_invokespecial(bytes, frame);
 				pc_incr = self.handle_invoke_result(invokespecial_result, frame, 3);
+				OpcodeResult::Incr(pc_incr)
 			}
 			Some(OperandCode::Invokestatic) => {
 				Debug(format!("invokestatic"), &self.debug_level, DebugLevel::Info);
 				/*
 				 * Start by assuming failure.
 				 */
-				pc_incr = 0;
+				let mut pc_incr: usize = 0;
 
 				let invokestatic_result = self.execute_invokestatic(bytes, frame);
 				pc_incr = self.handle_invoke_result(invokestatic_result, frame, 3);
+				OpcodeResult::Incr(pc_incr)
 			}
 			Some(OperandCode::New) => {
 				Debug(format!("New"), &self.debug_level, DebugLevel::Info);
@@ -469,14 +471,13 @@ impl JvmThread {
 						DebugLevel::Info,
 					);
 				}
-				pc_incr = 3;
+				OpcodeResult::Incr(3)
 			}
 			_ => {
 				assert!(false, "Unrecognized opcode: 0x{:x}", opcode);
-				pc_incr = 0;
+				OpcodeResult::Incr(0)
 			}
 		}
-		OpcodeResult::Incr(pc_incr)
 	}
 
 	fn handle_invoke_result(
