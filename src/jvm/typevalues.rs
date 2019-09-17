@@ -33,6 +33,7 @@ pub enum JvmPrimitiveType {
 	Boolean,
 	Integer,
 	Void,
+	LongInteger,
 	Invalid,
 }
 
@@ -42,6 +43,7 @@ impl fmt::Display for JvmPrimitiveType {
 			JvmPrimitiveType::Boolean => write!(f, "Boolean"),
 			JvmPrimitiveType::Integer => write!(f, "Integer"),
 			JvmPrimitiveType::Void => write!(f, "Void"),
+			JvmPrimitiveType::LongInteger => write!(f, "LongInteger"),
 			JvmPrimitiveType::Invalid => write!(f, "Invalid"),
 		}
 	}
@@ -166,6 +168,9 @@ impl From<&[u8]> for JvmType {
 			result = JvmType::Primitive(JvmPrimitiveType::Integer);
 		} else if from[0] == 'Z' as u8 {
 			result = JvmType::Primitive(JvmPrimitiveType::Boolean);
+		} else if from[0] == 'J' as u8 {
+			result = JvmType::Primitive(JvmPrimitiveType::LongInteger);
+			println!("parsed a J!");
 		} else if from[0] == 'L' as u8 {
 			/*
 			 * Walk through the end of the string
