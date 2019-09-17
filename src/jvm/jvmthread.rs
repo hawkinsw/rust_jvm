@@ -401,7 +401,17 @@ impl JvmThread {
 			Some(OperandCode::Imul) => {
 				Debug(format!("imul"), &self.debug_level, DebugLevel::Info);
 				self.execute_imul(frame);
-				pc_incr = 1;
+				OpcodeResult::Incr(1)
+			}
+			cmpop @ Some(OperandCode::If_icmpeq)
+			| cmpop @ Some(OperandCode::If_icmpne)
+			| cmpop @ Some(OperandCode::If_icmple)
+			| cmpop @ Some(OperandCode::If_icmpge)
+			| cmpop @ Some(OperandCode::If_icmpgt)
+			| cmpop @ Some(OperandCode::If_icmplt) => self.execute_icmp(frame, bytes, cmpop.unwrap()),
+			Some(OperandCode::Goto) => {
+				Debug(format!("goto"), &self.debug_level, DebugLevel::Info);
+				OpcodeResult::Incr((((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize)
 			}
 			Some(OperandCode::Ireturn) => {
 				Debug(format!("ireturn"), &self.debug_level, DebugLevel::Info);
@@ -543,6 +553,89 @@ impl JvmThread {
 				));
 			}
 		}
+	}
+
+	fn execute_icmp(
+		&mut self,
+		frame: &mut Frame,
+		bytes: &[u8],
+		operation: OperandCode,
+	) -> OpcodeResult {
+		let mut pc_incr: usize = 3;
+		let success_incr: usize = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
+		let fail_incr: usize = 3 as usize;
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, value2, _)) =
+			frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, value1, _)) =
+				frame.operand_stack.pop()
+			{
+				pc_incr = match operation {
+					OperandCode::If_icmpeq => {
+						Debug(format!("If_icmpeq"), &self.debug_level, DebugLevel::Info);
+						if value1 == value2 {
+							success_incr
+						} else {
+							fail_incr
+						}
+					}
+					OperandCode::If_icmpne => {
+						Debug(format!("If_icmpne"), &self.debug_level, DebugLevel::Info);
+						if value1 != value2 {
+							success_incr
+						} else {
+							fail_incr
+						}
+					}
+					OperandCode::If_icmplt => {
+						Debug(format!("If_icmplt"), &self.debug_level, DebugLevel::Info);
+						if value1 < value2 {
+							success_incr
+						} else {
+							fail_incr
+						}
+					}
+					OperandCode::If_icmpge => {
+						Debug(format!("If_icmpge"), &self.debug_level, DebugLevel::Info);
+						if value1 >= value2 {
+							success_incr
+						} else {
+							fail_incr
+						}
+					}
+					OperandCode::If_icmpgt => {
+						Debug(format!("If_icmpgt"), &self.debug_level, DebugLevel::Info);
+						if value1 > value2 {
+							success_incr
+						} else {
+							fail_incr
+						}
+					}
+					OperandCode::If_icmple => {
+						Debug(format!("If_icmple"), &self.debug_level, DebugLevel::Info);
+						if value1 <= value2 {
+							success_incr
+						} else {
+							fail_incr
+						}
+					}
+					_ => fail_incr,
+				}
+			} else {
+				FatalError::new(FatalErrorType::WrongType(
+					"If_icmpeq".to_string(),
+					"Integer".to_string(),
+				))
+				.call();
+			}
+		} else {
+			FatalError::new(FatalErrorType::WrongType(
+				"If_icmpeq".to_string(),
+				"Integer".to_string(),
+			))
+			.call();
+		}
+		OpcodeResult::Incr(pc_incr)
 	}
 
 	fn execute_astore_x(&self, x: usize, frame: &mut Frame) {
