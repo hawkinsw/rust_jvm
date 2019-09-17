@@ -49,7 +49,7 @@ pub enum Constant {
 	Class(u8, u16),
 	Fieldref(u8, u16, u16),
 	Methodref(u8, u16, u16),
-	InterfaceMethodref(),
+	InterfaceMethodref(u8, u16, u16),
 	String(u8, u16),
 	Integer(u8, u32),
 	Float(),
@@ -72,6 +72,11 @@ impl fmt::Display for Constant {
 				f,
 				"Methodref: tag: {}, index {}, name_and_type_index: {}",
 				tag, index, name_and_type_index
+			),
+			Constant::InterfaceMethodref(tag, class_index, name_and_type_index) => write!(
+				f,
+				"InterfaceMethodref: tag: {}, class_index {}, name_and_type_index: {}",
+				tag, class_index, name_and_type_index
 			),
 			Constant::Fieldref(tag, index, name_and_type_index) => write!(
 				f,

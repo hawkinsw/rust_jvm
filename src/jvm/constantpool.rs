@@ -118,7 +118,14 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					constants[i] = Constant::Methodref(tag, index, name_and_type_index);
 				}
 				Some(ConstantTag::InterfaceMethodref) => {
-					assert!(false, "TODO: Parse an interface method ref.");
+					let tag: u8 = bytes[offset];
+					let class_index: u16 =
+						(bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
+					let name_and_type_index: u16 =
+						(bytes[offset + 3] as u16) << 8 | (bytes[offset + 4] as u16);
+					offset += 5;
+					constants[i] =
+						Constant::InterfaceMethodref(tag, class_index, name_and_type_index);
 				}
 				Some(ConstantTag::String) => {
 					let tag: u8 = bytes[offset];
