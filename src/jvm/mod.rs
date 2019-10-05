@@ -65,9 +65,9 @@ impl Jvm {
 		 * Create a VM and start running!
 		 */
 		let env = environment::Environment::new(classpath, args);
-		let methodarea = Arc::new(Mutex::new(MethodArea::new(self.debug_level.clone())));
+		let methodarea = Arc::new(Mutex::new(MethodArea::new(self.debug_level.clone(), env)));
 		let mut thread = jvmthread::JvmThread::new(self.debug_level.clone(), methodarea);
-		if thread.run(start_class, start_function, &env) {
+		if thread.run(start_class, start_function) {
 			Debug(
 				format!("Success running {}.{}", start_class, start_function),
 				&self.debug_level,

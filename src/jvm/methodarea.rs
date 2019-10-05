@@ -22,17 +22,25 @@
 use jvm::class::Class;
 use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
+use jvm::environment::Environment;
 use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::LockResult;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 
+/// A LoadedClass holds *the* first reference to
+/// `class` and can be used to determine whether the
+/// `class` has been initialized.
 pub struct LoadedClass {
+	/// Whether or not `class` is initialized.
 	initialized: bool,
+	/// The base reference to class.
 	pub class: Rc<Class>,
 }
 
@@ -53,21 +61,62 @@ impl LoadedClass {
 
 pub struct MethodArea {
 	debug_level: DebugLevel,
+	environment: Environment,
 	classes: HashMap<String, Arc<Mutex<LoadedClass>>>,
 }
 
 impl MethodArea {
-	pub fn new(debug_level: DebugLevel) -> Self {
-		MethodArea {
-			debug_level: debug_level,
+	pub fn new(debug_level: DebugLevel, environment: Environment) -> Self {
+		let mut result = Self {
+			debug_level,
+			environment: environment.clone(),
 			classes: HashMap::new(),
+		};
+
+		for path in environment.classpath {
+			if let Ok(dir_list) = fs::read_dir(Path::new(&path)) {
+				for class_entry in dir_list {
+					if let Ok(class_entry) = class_entry {
+						if let Some(class_filename) = class_entry.path().to_str() {
+							let class_filename = class_filename.to_string();
+							if class_filename.ends_with("class") {
+								Debug(
+									format!("Loading class file {}", class_filename),
+									&result.debug_level,
+									DebugLevel::Info,
+								);
+								if let Some(class) = result.load_class_from_file(&class_filename) {
+									Debug(
+										format!("Loaded class {}.\n", class),
+										&result.debug_level,
+										DebugLevel::Info,
+									);
+								} else {
+									/*
+									 * TODO: Warn that we couldn't load this class for some reason.
+									 */
+								}
+							}
+						}
+					}
+				}
+			}
 		}
+		result
 	}
 
 	pub fn is_class_loaded(&self, class_name: &String) -> bool {
 		self.classes.contains_key(class_name)
 	}
 
+	/// If the class named `class_name` is loaded into the method area,
+	/// this function will increase its reference count by one and move
+	/// that reference count to the caller.
+	/// # Arguments
+	/// `class_name`: The name of the class to which caller wants a reference.
+	/// # Return value:
+	/// Optionally, a reference to the class named `class_name`. None if
+	/// the class is not loaded into the methodarea.
 	pub fn get_class_rc(&self, class_name: &String) -> Option<Rc<Class>> {
 		if let Some(loaded_class) = self.classes.get(class_name) {
 			let mut result: Option<Rc<Class>> = None;

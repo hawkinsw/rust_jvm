@@ -77,6 +77,6 @@ fn main() {
 		.collect();
 
 	if let Some(jvm) = jvm::jvm::Jvm::new(debug) {
-		jvm.run(&class, &method, &classpath, &args);
+		jvm.run(&class, &method, classpath.as_slice(), args.as_slice());
 	}
 }

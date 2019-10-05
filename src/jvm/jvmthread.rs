@@ -31,7 +31,6 @@ use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
 use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
-use jvm::environment::Environment;
 use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
 use jvm::frame::Frame;
@@ -45,8 +44,6 @@ use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmReferenceType;
 use jvm::typevalues::JvmType;
 use jvm::typevalues::JvmValue;
-use std::fs;
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::LockResult;
@@ -88,54 +85,13 @@ impl JvmThread {
 		}
 	}
 
-	pub fn run(
-		&mut self,
-		class_name: &String,
-		method_name: &String,
-		environment: &Environment,
-	) -> bool {
+	pub fn run(&mut self, class_name: &String, method_name: &String) -> bool {
 		/*
-		 * 1. Create a method area.
-		 * 2. Load classes in the classpath  into the method area.
 		 * 3. Load the method.
 		 * 4. Create a frame.
 		 * 5. Load the frame with arguments.
 		 * 6. Execute the method.
 		 */
-
-		for path in environment.classpath {
-			if let Ok(dir_list) = fs::read_dir(Path::new(path)) {
-				for class_entry in dir_list {
-					if let Ok(class_entry) = class_entry {
-						if let Some(class_filename) = class_entry.path().to_str() {
-							let class_filename = class_filename.to_string();
-							if class_filename.ends_with("class") {
-								Debug(
-									format!("Loading class file {}", class_filename),
-									&self.debug_level,
-									DebugLevel::Info,
-								);
-								if let Ok(mut methodarea) = self.methodarea.lock() {
-									if let Some(class) =
-										(*methodarea).load_class_from_file(&class_filename)
-									{
-										Debug(
-											format!("Loaded class {}.\n", class),
-											&self.debug_level,
-											DebugLevel::Info,
-										);
-									} else {
-										/*
-										 * TODO: Warn that we couldn't load this class for some reason.
-										 */
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
 
 		let mut main_class: Option<Rc<Class>> = None;
 		if let Ok(methodarea) = self.methodarea.lock() {
@@ -811,8 +767,9 @@ impl JvmThread {
 						}
 						if let Some(instantiated_class) = instantiated_class {
 							self.execute_clinit(&instantiated_class, instantiated_class_name);
+
 							let mut object = JvmObject::new(instantiated_class);
-							Debug(format!("{}", object), &self.debug_level, DebugLevel::Info);
+
 							object.instantiate();
 							result = Some(JvmValue::Reference(
 								JvmReferenceType::Class(instantiated_class_name.to_string()),
