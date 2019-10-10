@@ -24,13 +24,13 @@ use jvm::constantpool::ConstantPool;
 use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
 use jvm::object::JvmObject;
-use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
 #[derive(PartialEq, Clone)]
 pub enum JvmPrimitiveType {
 	Boolean,
+	Float,
 	Integer,
 	Void,
 	LongInteger,
@@ -41,6 +41,7 @@ impl fmt::Display for JvmPrimitiveType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			JvmPrimitiveType::Boolean => write!(f, "Boolean"),
+			JvmPrimitiveType::Float => write!(f, "Float"),
 			JvmPrimitiveType::Integer => write!(f, "Integer"),
 			JvmPrimitiveType::Void => write!(f, "Void"),
 			JvmPrimitiveType::LongInteger => write!(f, "LongInteger"),
@@ -51,7 +52,7 @@ impl fmt::Display for JvmPrimitiveType {
 
 #[derive(Clone)]
 pub enum JvmReferenceType {
-	Array(Rc<JvmValue>, u64),
+	Array(Rc<JvmType>, u64),
 	Class(String),
 	Interface(String),
 }
@@ -162,31 +163,46 @@ impl PartialEq for JvmValue {
 impl From<&[u8]> for JvmType {
 	fn from(from: &[u8]) -> Self {
 		let mut result = JvmType::Primitive(JvmPrimitiveType::Invalid);
-		if from[0] == 'V' as u8 {
-			result = JvmType::Primitive(JvmPrimitiveType::Void);
-		} else if from[0] == 'I' as u8 {
-			result = JvmType::Primitive(JvmPrimitiveType::Integer);
-		} else if from[0] == 'Z' as u8 {
-			result = JvmType::Primitive(JvmPrimitiveType::Boolean);
-		} else if from[0] == 'J' as u8 {
-			result = JvmType::Primitive(JvmPrimitiveType::LongInteger);
-			println!("parsed a J!");
-		} else if from[0] == 'L' as u8 {
-			/*
-			 * Walk through the end of the string
-			 * and make that our class name.
-			 */
-			let mut index = 1;
-			while from[index] != ';' as u8 {
-				index = index + 1;
+		match from[0] as char {
+			'V' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Void);
 			}
-			if let Ok(classname) = std::str::from_utf8(&from[1..index]) {
-				result = JvmType::Reference(JvmReferenceType::Class(classname.to_string()))
-			} else {
-				FatalError::new(FatalErrorType::InvalidFieldType('L')).call();
+			'F' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Float);
 			}
-		} else {
-			FatalError::new(FatalErrorType::InvalidFieldType(from[0] as char)).call();
+			'I' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Integer);
+			}
+			'Z' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Boolean);
+			}
+			'J' => {
+				result = JvmType::Primitive(JvmPrimitiveType::LongInteger);
+			}
+			'[' => {
+				result = JvmType::Reference(JvmReferenceType::Array(
+					Rc::<JvmType>::new(JvmType::from(&from[1..])),
+					0,
+				));
+			}
+			'L' => {
+				/*
+				 * Walk through the end of the string
+				 * and make that our class name.
+				 */
+				let mut index = 1;
+				while from[index] != ';' as u8 {
+					index = index + 1;
+				}
+				if let Ok(classname) = std::str::from_utf8(&from[1..index]) {
+					result = JvmType::Reference(JvmReferenceType::Class(classname.to_string()))
+				} else {
+					FatalError::new(FatalErrorType::InvalidFieldType('L')).call();
+				}
+			}
+			_ => {
+				FatalError::new(FatalErrorType::InvalidFieldType(from[0] as char)).call();
+			}
 		}
 		result
 	}
