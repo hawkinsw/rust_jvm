@@ -29,22 +29,30 @@ use std::rc::Rc;
 
 #[derive(PartialEq, Clone)]
 pub enum JvmPrimitiveType {
-	Boolean,
+	Void,
+	Byte,
+	Char,
+	Double,
 	Float,
 	Integer,
-	Void,
 	LongInteger,
+	Short,
+	Boolean,
 	Invalid,
 }
 
 impl fmt::Display for JvmPrimitiveType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			JvmPrimitiveType::Boolean => write!(f, "Boolean"),
+			JvmPrimitiveType::Void => write!(f, "Void"),
+			JvmPrimitiveType::Byte => write!(f, "Byte"),
+			JvmPrimitiveType::Char => write!(f, "Char"),
+			JvmPrimitiveType::Double => write!(f, "Double"),
 			JvmPrimitiveType::Float => write!(f, "Float"),
 			JvmPrimitiveType::Integer => write!(f, "Integer"),
-			JvmPrimitiveType::Void => write!(f, "Void"),
 			JvmPrimitiveType::LongInteger => write!(f, "LongInteger"),
+			JvmPrimitiveType::Short => write!(f, "Short"),
+			JvmPrimitiveType::Boolean => write!(f, "Boolean"),
 			JvmPrimitiveType::Invalid => write!(f, "Invalid"),
 		}
 	}
@@ -167,23 +175,23 @@ impl From<&[u8]> for JvmType {
 			'V' => {
 				result = JvmType::Primitive(JvmPrimitiveType::Void);
 			}
+			'B' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Byte);
+			}
+			'C' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Char);
+			}
 			'F' => {
 				result = JvmType::Primitive(JvmPrimitiveType::Float);
+			}
+			'D' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Double);
 			}
 			'I' => {
 				result = JvmType::Primitive(JvmPrimitiveType::Integer);
 			}
-			'Z' => {
-				result = JvmType::Primitive(JvmPrimitiveType::Boolean);
-			}
 			'J' => {
 				result = JvmType::Primitive(JvmPrimitiveType::LongInteger);
-			}
-			'[' => {
-				result = JvmType::Reference(JvmReferenceType::Array(
-					Rc::<JvmType>::new(JvmType::from(&from[1..])),
-					0,
-				));
 			}
 			'L' => {
 				/*
@@ -200,6 +208,19 @@ impl From<&[u8]> for JvmType {
 					FatalError::new(FatalErrorType::InvalidFieldType('L')).call();
 				}
 			}
+			'S' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Short);
+			}
+			'Z' => {
+				result = JvmType::Primitive(JvmPrimitiveType::Boolean);
+			}
+			'[' => {
+				result = JvmType::Reference(JvmReferenceType::Array(
+					Rc::<JvmType>::new(JvmType::from(&from[1..])),
+					0,
+				));
+			}
+
 			_ => {
 				FatalError::new(FatalErrorType::InvalidFieldType(from[0] as char)).call();
 			}
