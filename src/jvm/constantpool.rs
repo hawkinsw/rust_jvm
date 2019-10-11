@@ -145,10 +145,32 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					constants[i] = Constant::Integer(tag, bytes);
 				}
 				Some(ConstantTag::Float) => {
-					assert!(false, "TODO: Parse a constant float");
+					let tag: u8 = bytes[offset];
+					let bytes: u32 = (bytes[offset + 1] as u32) << 24
+						| (bytes[offset + 2] as u32) << 16
+						| (bytes[offset + 3] as u32) << 8
+						| (bytes[offset + 4] as u32) << 0;
+					offset += 5;
+					// TODO: Parse a constant float from bytes into value
+					// https://docs.oracle.com/javase/specs/jvms/se13/html/jvms-4.html#jvms-4.4.4
+					constants[i] = Constant::Float(tag, bytes);
 				}
 				Some(ConstantTag::Long) => {
-					assert!(false, "TODO: Parse a constant long");
+					let tag: u8 = bytes[offset];
+					let bytes: u64 = (bytes[offset + 1] as u64) << 56
+						| (bytes[offset + 2] as u64) << 48
+						| (bytes[offset + 3] as u64) << 40
+						| (bytes[offset + 4] as u64) << 32
+						| (bytes[offset + 5] as u64) << 24
+						| (bytes[offset + 6] as u64) << 16
+						| (bytes[offset + 7] as u64) << 8
+						| (bytes[offset + 8] as u64) << 0;
+					offset += 9;
+					/*
+					 * From https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.4.5
+					 * "... then the next usable item in the pool is located at index n+2"
+					 */
+					skip = true;
 				}
 				Some(ConstantTag::Double) => {
 					let tag: u8 = bytes[offset];
@@ -161,6 +183,9 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 						| (bytes[offset + 7] as u64) << 8
 						| (bytes[offset + 8] as u64) << 0;
 					offset += 9;
+					// TODO: Parse a constant double from bytes into value
+					// https://docs.oracle.com/javase/specs/jvms/se13/html/jvms-4.html#jvms-4.4.5
+					constants[i] = Constant::Long(tag, bytes);
 					constants[i] = Constant::Double(tag, bytes);
 					/*
 					 * From https://docs.oracle.com/javase/specs/jvms/se7/html/jvms-4.html#jvms-4.4.5
@@ -182,7 +207,16 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					let tag: u8 = bytes[offset];
 					let length: u16 = (bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
 					let value_range = offset + 3..offset + 3 + (length as usize);
-					let value = str::from_utf8(&bytes[value_range]).unwrap();
+					let mut value: &str = "";
+
+					match str::from_utf8(&bytes[value_range]) {
+						Ok(v) => {
+							value = v;
+						}
+						Err(_) => {
+							//assert!(false, "TODO: Parse a modified UTF8 string");
+						}
+					}
 
 					/*
 					 * Handle "Six attributes are critical to correct interpretation
@@ -201,13 +235,33 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					constants[i] = Constant::Utf8(tag, reserved, length, value.to_string());
 				}
 				Some(ConstantTag::MethodHandle) => {
-					assert!(false, "TODO: Parse a method handle");
+					let tag: u8 = bytes[offset];
+					let reference_kind: u8 = bytes[offset + 1];
+					let reference_index: u16 =
+						(bytes[offset + 2] as u16) << 8 | (bytes[offset + 3] as u16);
+					constants[i] = Constant::MethodHandle(tag, reference_kind, reference_index);
+					offset += 4;
 				}
 				Some(ConstantTag::MethodType) => {
-					assert!(false, "TODO: Parse a method type");
+					let tag: u8 = bytes[offset];
+					let descriptor_index: u16 =
+						(bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
+
+					constants[i] = Constant::MethodType(tag, descriptor_index);
+					offset += 3;
 				}
 				Some(ConstantTag::InvokeDynamic) => {
-					assert!(false, "TODO: Parse a invoke dynamic");
+					let tag: u8 = bytes[offset];
+					let bootstrap_method_attr_index: u16 =
+						(bytes[offset + 1] as u16) << 8 | (bytes[offset + 2] as u16);
+					let name_and_type_index: u16 =
+						(bytes[offset + 3] as u16) << 8 | (bytes[offset + 4] as u16);
+					constants[i] = Constant::InvokeDynamic(
+						tag,
+						bootstrap_method_attr_index,
+						name_and_type_index,
+					);
+					offset += 5;
 				}
 				Some(ConstantTag::Module) => {
 					assert!(false, "TODO: Parse a module");
