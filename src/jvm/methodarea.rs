@@ -20,16 +20,24 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use jvm::class::Class;
+use jvm::class::ClassInitializationStatus;
+use jvm::classpath::ClassLocation;
+use jvm::classpath::ClassPath;
 use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
 use jvm::environment::Environment;
+use jvm::error::FatalError;
+use jvm::error::FatalErrorType;
 use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
+use jvm::typevalues::JvmValue;
+use rjar::Jar;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Condvar;
 use std::sync::LockResult;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
@@ -39,7 +47,10 @@ use std::sync::MutexGuard;
 /// `class` has been initialized.
 pub struct LoadedClass {
 	/// Whether or not `class` is initialized.
-	initialized: bool,
+	/// This is known as LC in the spec.
+	pub lc: Mutex<ClassInitializationStatus>,
+	pub lc_waitq: Condvar,
+
 	/// The base reference to class.
 	pub class: Rc<Class>,
 }
@@ -48,70 +59,32 @@ impl LoadedClass {
 	fn new(class: Class) -> Self {
 		LoadedClass {
 			class: Rc::new(class),
-			initialized: false,
+			lc: Mutex::new(ClassInitializationStatus::VerifiedPreparedNotInitialized),
+			lc_waitq: Condvar::new(),
 		}
-	}
-	pub fn is_initialized(&self) -> bool {
-		self.initialized
-	}
-	pub fn initialize(&mut self) {
-		self.initialized = true;
 	}
 }
 
 pub struct MethodArea {
 	debug_level: DebugLevel,
 	environment: Environment,
-	classes: HashMap<String, Arc<Mutex<LoadedClass>>>,
+	classes: HashMap<String, Arc<LoadedClass>>,
 }
 
 impl MethodArea {
 	pub fn new(debug_level: DebugLevel, environment: Environment) -> Self {
 		let mut result = Self {
 			debug_level,
-			environment: environment.clone(),
+			environment: environment,
 			classes: HashMap::new(),
 		};
-
-		for path in environment.classpath {
-			if let Ok(dir_list) = fs::read_dir(Path::new(&path)) {
-				for class_entry in dir_list {
-					if let Ok(class_entry) = class_entry {
-						if let Some(class_filename) = class_entry.path().to_str() {
-							let class_filename = class_filename.to_string();
-							if class_filename.ends_with("class") {
-								Debug(
-									format!("Loading class file {}", class_filename),
-									&result.debug_level,
-									DebugLevel::Info,
-								);
-								if let Some(class) = result.load_class_from_file(&class_filename) {
-									Debug(
-										format!("Loaded class {}.\n", class),
-										&result.debug_level,
-										DebugLevel::Info,
-									);
-								} else {
-									/*
-									 * TODO: Warn that we couldn't load this class for some reason.
-									 */
-								}
-							}
-						}
-					}
-				}
-			}
-		}
 		result
-	}
-
-	pub fn is_class_loaded(&self, class_name: &String) -> bool {
-		self.classes.contains_key(class_name)
 	}
 
 	/// If the class named `class_name` is loaded into the method area,
 	/// this function will increase its reference count by one and move
 	/// that reference count to the caller.
+	/// This must be called with the methodarea locked.
 	/// # Arguments
 	/// `class_name`: The name of the class to which caller wants a reference.
 	/// # Return value:
@@ -119,20 +92,40 @@ impl MethodArea {
 	/// the class is not loaded into the methodarea.
 	pub fn get_class_rc(&self, class_name: &String) -> Option<Rc<Class>> {
 		if let Some(loaded_class) = self.classes.get(class_name) {
-			let mut result: Option<Rc<Class>> = None;
-			if let Ok(loaded_class) = loaded_class.lock() {
-				result = Some(Rc::clone(&(loaded_class.class)));
-			}
-			result
+			Some(Rc::clone(&(loaded_class.class)))
 		} else {
 			None
 		}
 	}
 
-	pub fn get_loaded_class(&self, class_name: &String) -> Option<Arc<Mutex<LoadedClass>>> {
+	///
+	/// Must call this with the methodarea locked.
+	///
+	pub fn maybe_load_class(&mut self, class_name: &String) {
+		if let None = self.classes.get(class_name) {
+			match self.environment.class_location_for_class(class_name) {
+				Some(ClassLocation::ClassFile(location)) => {
+					self.load_class_from_file(&location);
+				}
+				Some(ClassLocation::JarFile(jarfile, location)) => {
+					if let Ok(mut jar) = Jar::open(&jarfile) {
+						if let Ok(bytes) = jar.file_contents_by_name(&location) {
+							self.load_class_from_bytes(bytes);
+						}
+					}
+				}
+				None => {
+					println!("error: no path to {}", class_name);
+				}
+			}
+		}
+	}
+
+	pub fn get_loaded_class(&mut self, class_name: &String) -> Option<Arc<LoadedClass>> {
 		if let Some(loaded_class) = self.classes.get(class_name) {
 			Some(Arc::clone(loaded_class))
 		} else {
+			FatalError::new(FatalErrorType::ClassNotFound(class_name.to_string())).call();
 			None
 		}
 	}
@@ -210,6 +203,31 @@ impl MethodArea {
 		result
 	}
 
+	pub fn resolve_field(
+		&mut self,
+		field_class: &Rc<Class>,
+		field_name: &String,
+		field_type: &String,
+	) -> Option<String> {
+		let mut target_class = field_class;
+		while {
+			if target_class
+				.get_fields_ref()
+				.contains_field_with_name_and_type(
+					field_name,
+					field_type,
+					target_class.get_constant_pool_ref(),
+				) {
+				return target_class.get_class_name();
+			} else {
+				assert!(false, "Must look in the super class for a field.");
+				target_class = target_class;
+				true // go again
+			}
+		} {}
+		None
+	}
+
 	pub fn resolve_method(
 		&mut self,
 		invoking_class: &Rc<Class>,
@@ -263,7 +281,7 @@ impl MethodArea {
 				 * lookup is recursively invoked on the direct superclass
 				 * of [class].
 				 */
-				assert!(false, "Must look in the super class");
+				assert!(false, "Must look in the super class for a method");
 				target_class = target_class;
 				true
 			}
@@ -284,14 +302,13 @@ impl MethodArea {
 
 		result
 	}
-
-	pub fn load_class_from_file(&mut self, class_filename: &String) -> Option<Rc<Class>> {
-		if let Some(class) = Class::load(class_filename) {
+	pub fn load_class_from_bytes(&mut self, class_bytes: Vec<u8>) -> Option<Rc<Class>> {
+		if let Some(class) = Class::load_from_bytes(class_bytes) {
 			if let Some(class_name) = class.get_class_name() {
-				if let Some(_) = self.classes.insert(
-					class_name.to_string(),
-					Arc::new(Mutex::new(LoadedClass::new(class))),
-				) {
+				if let Some(_) = self
+					.classes
+					.insert(class_name.to_string(), Arc::new(LoadedClass::new(class)))
+				{
 					/*
 					 * This is a fatal error -- loading the same class twice!
 					 */
@@ -300,11 +317,29 @@ impl MethodArea {
 				 * loaded_class is an Arc
 				 */
 				let loaded_class = self.classes.get(&class_name).unwrap();
-				let mut result: Option<Rc<Class>> = None;
-				if let Ok(loaded_class) = loaded_class.lock() {
-					result = Some(Rc::clone(&loaded_class.class));
+				return Some(Rc::clone(&loaded_class.class));
+			}
+		}
+		None
+	}
+
+	pub fn load_class_from_file(&mut self, class_filename: &String) -> Option<Rc<Class>> {
+		if let Some(class) = Class::load_from_file(class_filename) {
+			if let Some(class_name) = class.get_class_name() {
+				println!("load_class_from_file: {}", class_name);
+				if let Some(_) = self
+					.classes
+					.insert(class_name.to_string(), Arc::new(LoadedClass::new(class)))
+				{
+					/*
+					 * This is a fatal error -- loading the same class twice!
+					 */
 				}
-				return result;
+				/*
+				 * loaded_class is an Arc
+				 */
+				let loaded_class = self.classes.get(&class_name).unwrap();
+				return Some(Rc::clone(&loaded_class.class));
 			}
 		}
 		None

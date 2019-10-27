@@ -135,7 +135,6 @@ impl<'l> From<&'l Vec<u8>> for ConstantPool {
 					constants[i] = Constant::String(tag, string_index);
 				}
 				Some(ConstantTag::Integer) => {
-					print!("Integer\n");
 					let tag: u8 = bytes[offset];
 					let bytes: u32 = (bytes[offset + 1] as u32) << 24
 						| (bytes[offset + 2] as u32) << 16

@@ -27,6 +27,7 @@ use arm_and_handler::handler;
 use enum_primitive::FromPrimitive;
 use jvm::class::Class;
 use jvm::class::ClassAccessFlags;
+use jvm::class::ClassInitializationStatus;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
 use jvm::debug::Debug;
@@ -54,6 +55,7 @@ pub struct JvmThread {
 	debug_level: DebugLevel,
 	methodarea: Arc<Mutex<MethodArea>>,
 	pc: usize,
+	initializing_class: Option<String>,
 }
 
 enum OpcodeResult {
@@ -82,6 +84,7 @@ impl JvmThread {
 			debug_level: debug_level,
 			methodarea: methodarea,
 			pc: 0,
+			initializing_class: None,
 		}
 	}
 
@@ -94,7 +97,8 @@ impl JvmThread {
 		 */
 
 		let mut main_class: Option<Rc<Class>> = None;
-		if let Ok(methodarea) = self.methodarea.lock() {
+		if let Ok(mut methodarea) = self.methodarea.lock() {
+			(*methodarea).maybe_load_class(class_name);
 			main_class = (*methodarea).get_class_rc(class_name);
 		}
 		if let Some(main_class) = main_class {
@@ -108,7 +112,7 @@ impl JvmThread {
 			 * Per the spec, it is required that we initialize the main
 			 * class before calling the main method inside that class.
 			 */
-			self.execute_clinit(&main_class, class_name);
+			self.maybe_initialize_class(&main_class);
 
 			if let Some(main_method) = main_class
 				.get_method_rc_by_name_and_type(method_name, &"([Ljava/lang/String;)V".to_string())
@@ -343,8 +347,9 @@ impl JvmThread {
 				 * TODO: The type on the stack must be a "category 1
 				 * computational type."
 				 */
-				if let Some(top) = frame.operand_stack.last() {
+				if let Some(top) = frame.operand_stack.pop() {
 					frame.operand_stack.push(top.clone());
+					frame.operand_stack.push(top);
 				}
 				OpcodeResult::Incr(1)
 			}
@@ -375,6 +380,15 @@ impl JvmThread {
 			Some(OperandCode::r#Return) => {
 				Debug(format!("return"), &self.debug_level, DebugLevel::Info);
 				OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0))
+			}
+			Some(OperandCode::GetStatic) => {
+				Debug(format!("getstatic"), &self.debug_level, DebugLevel::Info);
+				if let Some(_) = self.execute_getstatic(bytes, frame) {
+				} else {
+					FatalError::new(FatalErrorType::NotImplemented(format!("0x{:x}", opcode)))
+						.call();
+				}
+				OpcodeResult::Incr(3)
 			}
 			Some(OperandCode::Invokevirtual) => {
 				Debug(
@@ -430,7 +444,7 @@ impl JvmThread {
 				OpcodeResult::Incr(3)
 			}
 			_ => {
-				assert!(false, "Unrecognized opcode: 0x{:x}", opcode);
+				FatalError::new(FatalErrorType::NotImplemented(format!("0x{:x}", opcode))).call();
 				OpcodeResult::Incr(0)
 			}
 		}
@@ -482,6 +496,11 @@ impl JvmThread {
 	}
 
 	fn execute_iadd(&mut self, frame: &mut Frame) {
+		Debug(
+			format!("iadd frame: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
 		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op1, _)) =
 			frame.operand_stack.pop()
 		{
@@ -668,75 +687,157 @@ impl JvmThread {
 			.push(JvmValue::Primitive(JvmPrimitiveType::Integer, x as u64, 0));
 	}
 
-	fn execute_clinit(&mut self, class: &Rc<Class>, class_name: &String) {
+	fn maybe_initialize_class(&mut self, class: &Rc<Class>) {
 		/*
-		 * Check to see if we need to initialize the class
-		 * before invoking a method on it.
-		 *
-		 * To do that, we have to lock the method area to make
-		 * sure that the class doesn't go away from underneath
-		 * us. Then, we need to get exclusive access to the
-		 * class itself. Once we have that, we can initialize
-		 * the class!
+		 * Get the class' name and fail if we cannot.
 		 */
-		let mut loaded_class: Option<Arc<Mutex<LoadedClass>>> = None;
-		if let Ok(methodarea) = self.methodarea.lock() {
-			loaded_class = (*methodarea).get_loaded_class(class_name);
-		} else {
-			FatalError::new(FatalErrorType::CouldNotLock(
-				"Method Area.".to_string(),
-				"execute_clinit".to_string(),
-			))
-			.call();
-		}
+		let class_name: String = match class.get_class_name() {
+			Some(class_name) => class_name,
+			_ => {
+				FatalError::new(FatalErrorType::ClassNoName).call();
+				return;
+			}
+		};
 
-		if let Some(loaded_class) = loaded_class {
-			if let Ok(mut loaded_class) = loaded_class.lock() {
-				if (*loaded_class).is_initialized() {
-					return;
+		/*
+		 * Start by getting a reference to /at least/ a verified and
+		 * prepared class. If we cannot, then we have to fail.
+		 * To do that, we have to lock the method area to make
+		 * sure that the class doesn't go away from underneath us.
+		 */
+		let loaded_class = match {
+			match self.methodarea.lock() {
+				Ok(mut methodarea) => (*methodarea).get_loaded_class(&class_name),
+				_ => {
+					FatalError::new(FatalErrorType::CouldNotLock(
+						"Method Area.".to_string(),
+						"initialize_class".to_string(),
+					))
+					.call();
+					None
 				}
+			}
+		} {
+			Some(loaded_class) => loaded_class,
+			_ => {
+				FatalError::new(FatalErrorType::ClassNotFound(class_name.to_string())).call();
+				return;
+			}
+		};
 
-				(*loaded_class).initialize();
-
-				let clinit: String = "<clinit>".into();
-
-				/*
-				 * We must invoke the clinit method, if one exists.
-				 */
-				if let Some(clinit_method) = class.get_methods_ref().get_by_name_and_type(
-					&clinit,
-					&"()V".to_string(),
-					class.get_constant_pool_ref(),
-				) {
-					Debug(
-						format!("clinit Method: {}", clinit_method),
-						&self.debug_level,
-						DebugLevel::Info,
-					);
-
-					let mut clinit_frame = Frame::new();
-					clinit_frame.class = Some(Rc::clone(&class));
-
-					Debug(
-						format!("clinit Frame: {}", clinit_frame),
-						&self.debug_level,
-						DebugLevel::Info,
-					);
-
-					if let Some(v) = self.execute_method(&clinit_method, clinit_frame) {
-						if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0) != v {
-							FatalError::new(FatalErrorType::ClassInitMethodReturnedValue).call();
-						}
-					}
-				}
-			} else {
+		/*
+		 * Step 1: Sync on LC.
+		 */
+		let lc = match (*loaded_class).lc.lock() {
+			Ok(lc) => lc,
+			_ => {
 				FatalError::new(FatalErrorType::CouldNotLock(
-					class_name.to_string(),
-					"execute_clinit".to_string(),
+					"Class LC.".to_string(),
+					"maybe_initialize_class".to_string(),
 				))
 				.call();
+				return;
+			}
+		};
+
+		Debug(
+			format!("Locked LC of: {}", class_name),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+
+		match *lc {
+			ClassInitializationStatus::BeingInitialized => {
+				if let Some(class_being_initialized_by_current_thread) = &self.initializing_class {
+					/*
+					 * TODO
+					 */
+					assert!(false);
+				} else {
+					/*
+					 * This class is being initialized in another thread, so let's wait for it to finish.
+					 */
+					Debug(
+						format!(
+							"Waiting for another thread to complete initialization of: {}",
+							class_name
+						),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+
+					/*
+					 * TODO
+					 */
+					assert!(false);
+				}
+			}
+			ClassInitializationStatus::Initialized => {
+				Debug(
+					format!("Class {} already initialized.", class_name),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				return;
+			}
+			_ => {
+				FatalError::new(FatalErrorType::ClassInstantiationFailed(class_name)).call();
+				return;
+			}
+		};
+
+		/*
+		 * It must be true that self.initializing_class is None. It is an error
+		 * to initialize class B while initializing class A.
+		 */
+		/*
+						if let Some(initializing_class) = &self.initializing_class {
+							if initializing_class == class_name {
+								println!("Initializing ourselves.\n");
+							}
+							FatalError::new(FatalErrorType::RecursiveClassInitialization(
+								(*class_name).clone(),
+								(*initializing_class).clone(),
+							))
+							.call();
+						}
+
+						self.initializing_class = Some(class_name.clone());
+
+						(*loaded_class).initialize();
+		*/
+		let clinit: String = "<clinit>".into();
+
+		/*
+		 * We must invoke the clinit method, if one exists.
+		 */
+		if let Some(clinit_method) = class.get_methods_ref().get_by_name_and_type(
+			&clinit,
+			&"()V".to_string(),
+			class.get_constant_pool_ref(),
+		) {
+			Debug(
+				format!("clinit Method: {}", clinit_method),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
+
+			let mut clinit_frame = Frame::new();
+			clinit_frame.class = Some(Rc::clone(&class));
+
+			Debug(
+				format!("clinit Frame: {}", clinit_frame),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
+
+			if let Some(v) = self.execute_method(&clinit_method, clinit_frame) {
+				if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0) != v {
+					FatalError::new(FatalErrorType::ClassInitMethodReturnedValue).call();
+				}
 			}
 		}
+		self.initializing_class = None;
 	}
 
 	fn execute_new(&mut self, bytes: &[u8], source_frame: &mut Frame) -> Option<JvmValue> {
@@ -753,9 +854,11 @@ impl JvmThread {
 							&self.debug_level,
 							DebugLevel::Info,
 						);
+
 						let mut result: Option<JvmValue> = None;
 						let mut instantiated_class: Option<Rc<Class>> = None;
-						if let Ok(methodarea) = self.methodarea.lock() {
+						if let Ok(mut methodarea) = self.methodarea.lock() {
+							(*methodarea).maybe_load_class(&instantiated_class_name);
 							instantiated_class =
 								(*methodarea).get_class_rc(instantiated_class_name);
 						} else {
@@ -766,7 +869,7 @@ impl JvmThread {
 							.call();
 						}
 						if let Some(instantiated_class) = instantiated_class {
-							self.execute_clinit(&instantiated_class, instantiated_class_name);
+							self.maybe_initialize_class(&instantiated_class);
 
 							let mut object = JvmObject::new(instantiated_class);
 
@@ -806,6 +909,69 @@ impl JvmThread {
 			}
 		}
 	}
+	fn execute_getstatic(
+		&mut self,
+		bytes: &[u8],
+		source_frame: &mut Frame,
+	) -> Option<OpcodeResult> {
+		let class = source_frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
+		let field_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
+
+		if let Some((field_class_name, field_name, field_type)) =
+			class.resolve_field_ref(field_index)
+		{
+			Debug(
+				format!(
+					"get static: {}.{} ({})",
+					field_class_name, field_name, field_type
+				),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
+			let mut resolved_field_class: Option<Rc<Class>> = None;
+			let mut resolved_field_class_name: String = "".to_string();
+
+			if let Ok(mut methodarea) = self.methodarea.lock() {
+				(*methodarea).maybe_load_class(&field_class_name);
+				if let Some(field_class) = (*methodarea).get_class_rc(&field_class_name) {
+					if let Some(_resolved_field_class_name) =
+						(*methodarea).resolve_field(&field_class, &field_name, &field_type)
+					{
+						resolved_field_class_name = _resolved_field_class_name;
+						(*methodarea).maybe_load_class(&field_class_name);
+						resolved_field_class =
+							(*methodarea).get_class_rc(&resolved_field_class_name);
+					}
+				}
+			} else {
+				FatalError::new(FatalErrorType::CouldNotLock(
+					"Method Area.".to_string(),
+					"execute_getstatic".to_string(),
+				))
+				.call();
+			}
+
+			/*
+			 * Now it's time to execute clinit.
+			 */
+			if let Some(resolved_field_class) = resolved_field_class {
+				self.maybe_initialize_class(&resolved_field_class);
+			} else {
+				/*
+				 * TODO: This is a fatal error.
+				 */
+			}
+		} else {
+			FatalError::new(FatalErrorType::InvalidConstantReference(
+				class.get_class_name().unwrap(),
+				"FieldRef".to_string(),
+				field_index as u16,
+			))
+			.call();
+		}
+		return None;
+	}
 
 	fn execute_invokevirtual(
 		&mut self,
@@ -830,9 +996,10 @@ impl JvmThread {
 			);
 
 			if let Ok(mut methodarea) = self.methodarea.lock() {
+				(*methodarea).maybe_load_class(&invoked_class_name);
 				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
 				resolved_method = if let Some(invoked_class) = &invoked_class {
-					(*methodarea).resolve_method(&class, &invoked_class, &method_name, &method_type)
+					(*methodarea).resolve_method(&class, invoked_class, &method_name, &method_type)
 				} else {
 					None
 				};
@@ -948,6 +1115,7 @@ impl JvmThread {
 			);
 
 			if let Ok(mut methodarea) = self.methodarea.lock() {
+				(*methodarea).maybe_load_class(&invoked_class_name);
 				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
 				resolved_method = if let Some(invoked_class) = &invoked_class {
 					(*methodarea).resolve_method(&class, &invoked_class, &method_name, &method_type)
@@ -1085,7 +1253,7 @@ impl JvmThread {
 					 * This is an operation that requires the target class
 					 * be initialized.
 					 */
-					self.execute_clinit(&invoked_class, &invoked_class_name);
+					self.maybe_initialize_class(&invoked_class);
 
 					let mut invoked_frame = Frame::new();
 					invoked_frame.class = Some(Rc::clone(&invoked_class));

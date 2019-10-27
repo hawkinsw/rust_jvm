@@ -43,6 +43,13 @@ pub enum ClassAccessFlags {
 	Enum = 0x4000,
 }
 
+pub enum ClassInitializationStatus {
+	VerifiedPreparedNotInitialized,
+	BeingInitialized,
+	Initialized,
+	Error,
+}
+
 #[derive(Clone, Default)]
 pub struct Class {
 	bytes: Vec<u8>,
@@ -83,6 +90,63 @@ impl Class {
 			}
 		}
 		superclass_name
+	}
+
+	pub fn resolve_field_ref(&self, field_ref_index: usize) -> Option<(String, String, String)> {
+		let mut result: Option<(String, String, String)> = None;
+		let cp = &self.constant_pool;
+
+		if let Constant::Fieldref(_, class_idx, name_type_idx) =
+			cp.get_constant_clone(field_ref_index as usize)
+		{
+			if let Constant::NameAndType(_, field_name_idx, field_type_idx) =
+				cp.get_constant_clone(name_type_idx as usize)
+			{
+				if let Constant::Utf8(_, _, _, name) =
+					cp.get_constant_clone(field_name_idx as usize)
+				{
+					if let Constant::Utf8(_, _, _, r#type) =
+						cp.get_constant_clone(field_type_idx as usize)
+					{
+						if let Constant::Class(_, field_class_idx) =
+							cp.get_constant_clone(class_idx as usize)
+						{
+							if let Constant::Utf8(_, _, _, class) =
+								cp.get_constant_clone(field_class_idx as usize)
+							{
+								result = Some((class, name, r#type));
+							}
+						}
+					}
+				}
+			}
+		}
+		/*else {
+					FatalError::new(FatalErrorType::InvalidConstantReference(
+						class.get_class_name().unwrap(),
+						"Utf8".to_string(),
+						field_name_idx as u16,
+					))
+					.call();
+				}
+			} else {
+				FatalError::new(FatalErrorType::InvalidConstantReference(
+					class.get_class_name().unwrap(),
+					"NameAndType".to_string(),
+					field_name_type_idx as u16,
+				))
+				.call();
+			}
+		} else {
+			FatalError::new(FatalErrorType::InvalidConstantReference(
+				class.get_class_name().unwrap(),
+				"Fieldref".to_string(),
+				field_index as u16,
+			))
+			.call();
+		}
+		*/
+		result
 	}
 
 	/// Resolve a method reference into the name of method, the type of
@@ -185,29 +249,9 @@ impl Class {
 		offset + c.methods.byte_len()
 	}
 
-	pub fn load(class_with_path: &str) -> Option<Class> {
-		let mut bytes: Vec<u8> = Vec::new();
+	pub fn load_from_bytes(bytes: Vec<u8>) -> Option<Class> {
 		let mut c = Class::default();
 		let mut offset: usize = 0;
-
-		match fs::File::open(class_with_path) {
-			Ok(mut fd) => {
-				if let Err(err) = fd.read_to_end(&mut bytes) {
-					print!(
-						"oops: could not read the class file '{}': {}\n",
-						class_with_path, err
-					);
-					return None;
-				}
-			}
-			Err(err) => {
-				print!(
-					"oops: could not read the class file '{}': {}\n",
-					class_with_path, err
-				);
-				return None;
-			}
-		}
 
 		c.bytes = bytes;
 
@@ -240,7 +284,6 @@ impl Class {
 		c.interfaces_count = (c.bytes[offset + 0] as u16) << 8 | (c.bytes[offset + 1] as u16);
 		offset += 2;
 
-
 		/*
 		 * Handle the interfaces.
 		 */
@@ -265,6 +308,35 @@ impl Class {
 
 		Class::load_attributes(&mut c, offset);
 		Some(c)
+	}
+
+	/*
+	 * TODO: This is going to be have to be much more robust!
+	 */
+	pub fn load_from_file(class_with_path: &str) -> Option<Class> {
+		let mut bytes: Vec<u8> = Vec::new();
+		let mut c = Class::default();
+		let mut offset: usize = 0;
+
+		match fs::File::open(class_with_path) {
+			Ok(mut fd) => {
+				if let Err(err) = fd.read_to_end(&mut bytes) {
+					print!(
+						"oops: could not read the class file '{}': {}\n",
+						class_with_path, err
+					);
+					return None;
+				}
+			}
+			Err(err) => {
+				print!(
+					"oops: could not read the class file '{}': {}\n",
+					class_with_path, err
+				);
+				return None;
+			}
+		}
+		Class::load_from_bytes(bytes)
 	}
 }
 

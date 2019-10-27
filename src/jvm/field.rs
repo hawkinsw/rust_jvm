@@ -20,6 +20,9 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use jvm::attribute::Attributes;
+use jvm::constant::Constant;
+use jvm::constantpool::ConstantPool;
+use jvm::typevalues::JvmValue;
 use std::fmt;
 use std::iter::repeat;
 
@@ -113,6 +116,38 @@ impl Fields {
 
 	pub fn fields_count(&self) -> u16 {
 		self.fields.len() as u16
+	}
+
+	pub fn contains_field_with_name_and_type(
+		&self,
+		name: &String,
+		r#type: &String,
+		cp: &ConstantPool,
+	) -> bool {
+		for Field {
+			byte_len: _,
+			access_flags: _,
+			name_index,
+			descriptor_index,
+			..
+		} in &self.fields
+		{
+			if let Constant::Utf8(_, _, _, current_name) = cp.get_constant_ref(*name_index as usize)
+			{
+				if name != current_name {
+					continue;
+				}
+				if let Constant::Utf8(_, _, _, current_descriptor) =
+					cp.get_constant_ref(*descriptor_index as usize)
+				{
+					if r#type == current_descriptor {
+						println!("Found the field!");
+						return true;
+					}
+				}
+			}
+		}
+		false
 	}
 }
 

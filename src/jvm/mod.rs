@@ -22,6 +22,7 @@
 use std::fmt;
 mod attribute;
 mod class;
+mod classpath;
 mod constant;
 mod constantpool;
 pub mod debug;
@@ -64,7 +65,7 @@ impl Jvm {
 		/*
 		 * Create a VM and start running!
 		 */
-		let env = environment::Environment::new(classpath, args);
+		let env = environment::Environment::new(classpath, args, self.debug_level.clone());
 		let methodarea = Arc::new(Mutex::new(MethodArea::new(self.debug_level.clone(), env)));
 		let mut thread = jvmthread::JvmThread::new(self.debug_level.clone(), methodarea);
 		if thread.run(start_class, start_function) {

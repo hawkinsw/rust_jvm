@@ -1,17 +1,17 @@
-#[derive(Clone)]
+use jvm::classpath::ClassLocation;
+use jvm::classpath::ClassPath;
+use jvm::debug::DebugLevel;
+
 pub struct Environment {
-	pub classpath: Vec<String>,
+	pub classpath: ClassPath,
 	pub arguments: Vec<String>,
 }
 
 impl Environment {
-	pub fn new(cp: &[&str], args: &[&str]) -> Self {
-		let mut classpath = Vec::<String>::new();
+	pub fn new(cp: &[&str], args: &[&str], debug_level: DebugLevel) -> Self {
+		let classpath = ClassPath::new(cp, debug_level);
 		let mut arguments = Vec::<String>::new();
 
-		for dir in cp {
-			classpath.push((**dir).to_string());
-		}
 		for arg in args {
 			arguments.push((**arg).to_string());
 		}
@@ -20,5 +20,9 @@ impl Environment {
 			classpath,
 			arguments,
 		}
+	}
+
+	pub fn class_location_for_class(&self, class: &str) -> Option<ClassLocation> {
+		self.classpath.class_location_for_class(class)
 	}
 }

@@ -6,6 +6,7 @@ pub enum FatalErrorType {
 	CouldNotLock(String, String),
 	ClassNotLoaded(String),
 	ClassInstantiationFailed(String),
+	ClassNoName,
 	WrongType(String, String),
 	NotEnough(String, usize, String),
 	MethodResolutionFailed,
@@ -17,7 +18,9 @@ pub enum FatalErrorType {
 	InvalidConstantReference(String, String, u16),
 	VoidMethodReturnedValue,
 	ClassInitMethodReturnedValue,
+	RecursiveClassInitialization(String, String),
 	MethodExecutionFailed(String),
+	NotImplemented(String),
 }
 
 impl fmt::Display for FatalErrorType {
@@ -40,6 +43,7 @@ impl fmt::Display for FatalErrorType {
 			FatalErrorType::ClassInstantiationFailed(class) => {
 				write!(f, "Class {} could not be instantiated.", class)
 			}
+			FatalErrorType::ClassNoName => write!(f, "Class has no name!"),
 			FatalErrorType::WrongType(instruction, expected) => {
 				write!(f, "Wrong type: {} requires {}.", instruction, expected)
 			}
@@ -64,6 +68,12 @@ impl fmt::Display for FatalErrorType {
 			FatalErrorType::MethodExecutionFailed(method) => {
 				write!(f, "Method {} failed to execute.", method)
 			}
+			FatalErrorType::RecursiveClassInitialization(starting, inprogress) => write!(
+				f,
+				"Recursive initialization of {} not possible while initializing {}\n",
+				starting, inprogress
+			),
+			FatalErrorType::NotImplemented(what) => write!(f, "{} not implemented.", what),
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
 	}
