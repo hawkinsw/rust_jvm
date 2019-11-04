@@ -55,7 +55,7 @@ pub struct JvmThread {
 	debug_level: DebugLevel,
 	methodarea: Arc<Mutex<MethodArea>>,
 	pc: usize,
-	initializing_class: Option<String>,
+	initializing_class: Vec<String>,
 }
 
 enum OpcodeResult {
@@ -84,7 +84,7 @@ impl JvmThread {
 			debug_level: debug_level,
 			methodarea: methodarea,
 			pc: 0,
-			initializing_class: None,
+			initializing_class: Vec::<String>::new(),
 		}
 	}
 
@@ -736,7 +736,7 @@ impl JvmThread {
 		/*
 		 * Step 1: Sync on LC.
 		 */
-		let lc = match (*loaded_class).lc.lock() {
+		let mut lc = match (*loaded_class).lc.lock() {
 			Ok(lc) => lc,
 			_ => {
 				FatalError::new(FatalErrorType::CouldNotLock(
@@ -756,14 +756,31 @@ impl JvmThread {
 
 		match *lc {
 			ClassInitializationStatus::BeingInitialized => {
-				if let Some(class_being_initialized_by_current_thread) = &self.initializing_class {
-					/*
-					 * TODO
-					 */
-					assert!(false);
+				if let Some(class_being_initialized_by_current_thread) =
+					self.initializing_class.last()
+				{
+					if *class_being_initialized_by_current_thread == class_name.to_string() {
+						/*
+						 * We are the ones doing the current initialization, so
+						 * we just return.
+						 */
+						Debug(
+							format!("Recursive initialization; returning"),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+
+						Debug(
+							format!("Unlocked LC of: {}", class_name),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+						return;
+					}
 				} else {
 					/*
-					 * This class is being initialized in another thread, so let's wait for it to finish.
+					 * This thread is not initializing a class. Therefore, this class
+					 * must be initializing in another thread; wait for it to finish.
 					 */
 					Debug(
 						format!(
@@ -773,11 +790,25 @@ impl JvmThread {
 						&self.debug_level,
 						DebugLevel::Info,
 					);
-
-					/*
-					 * TODO
-					 */
-					assert!(false);
+					while {
+						match *lc {
+							ClassInitializationStatus::Initialized => false,
+							_ => true,
+						}
+					} {
+						lc = (*loaded_class).lc_waitq.wait(lc).unwrap();
+					}
+					Debug(
+						format!("Class {} done initializing; moving on.", class_name),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					Debug(
+						format!("Unlocked LC of: {}", class_name),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					return;
 				}
 			}
 			ClassInitializationStatus::Initialized => {
@@ -786,7 +817,20 @@ impl JvmThread {
 					&self.debug_level,
 					DebugLevel::Info,
 				);
+
+				Debug(
+					format!("Unlocked LC of: {}", class_name),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
 				return;
+			}
+			ClassInitializationStatus::VerifiedPreparedNotInitialized => {
+				Debug(
+					format!("Class {} is VerifiedPreparedNotInitialized.", class_name),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
 			}
 			_ => {
 				FatalError::new(FatalErrorType::ClassInstantiationFailed(class_name)).call();
@@ -795,25 +839,19 @@ impl JvmThread {
 		};
 
 		/*
-		 * It must be true that self.initializing_class is None. It is an error
-		 * to initialize class B while initializing class A.
+		 * Before we unlock, we have to set that the class initialization
+		 * is in progress and that we are the ones doing the initialization.
 		 */
-		/*
-						if let Some(initializing_class) = &self.initializing_class {
-							if initializing_class == class_name {
-								println!("Initializing ourselves.\n");
-							}
-							FatalError::new(FatalErrorType::RecursiveClassInitialization(
-								(*class_name).clone(),
-								(*initializing_class).clone(),
-							))
-							.call();
-						}
+		*lc = ClassInitializationStatus::BeingInitialized;
+		self.initializing_class.push(class_name.to_string());
+		std::mem::drop(lc);
 
-						self.initializing_class = Some(class_name.clone());
+		Debug(
+			format!("Unlocked LC of: {}", class_name),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
 
-						(*loaded_class).initialize();
-		*/
 		let clinit: String = "<clinit>".into();
 
 		/*
@@ -845,7 +883,39 @@ impl JvmThread {
 				}
 			}
 		}
-		self.initializing_class = None;
+
+		/*
+		 * Now, let's acquire the lock again, update it's status and then
+		 * notify those that might be waiting.
+		 */
+		match (*loaded_class).lc.lock() {
+			Ok(mut lc) => {
+				Debug(
+					format!("Locked LC of: {}", class_name),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				*lc = ClassInitializationStatus::Initialized;
+				self.initializing_class.pop();
+				(*loaded_class).lc_waitq.notify_all();
+				/*
+				 * The LC will automatically unlock.
+				 */
+				Debug(
+					format!("Unlocked LC of: {}", class_name),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+			}
+			_ => {
+				FatalError::new(FatalErrorType::CouldNotLock(
+					"Class LC.".to_string(),
+					"maybe_initialize_class".to_string(),
+				))
+				.call();
+				return;
+			}
+		};
 	}
 
 	fn execute_new(&mut self, bytes: &[u8], source_frame: &mut Frame) -> Option<JvmValue> {
@@ -978,6 +1048,7 @@ impl JvmThread {
 			))
 			.call();
 		}
+		println!("For some reason we are returning None!");
 		return None;
 	}
 
