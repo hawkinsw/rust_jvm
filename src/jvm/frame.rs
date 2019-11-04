@@ -62,7 +62,11 @@ impl fmt::Display for Frame {
 			result = write!(f, "{}: {}\n", i, &self.locals[i]);
 		}
 		result = write!(f, "==============\n");
-
+		if let Some(class) = &self.class {
+			if let Some(class_name) = (*class).get_class_name() {
+				result = write!(f, "Class: {}", class_name);
+			}
+		}
 		result
 	}
 }
