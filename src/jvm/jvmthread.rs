@@ -615,7 +615,11 @@ impl JvmThread {
 	}
 
 	fn execute_astore_x(&self, x: usize, frame: &mut Frame) {
-		println!("Frame before store: {}\n", frame);
+		Debug(
+			format!("Frame before astore_x: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
 		if x < frame.locals.len() {
 			if let Some(top) = frame.operand_stack.pop() {
 				if let JvmValue::Reference(rt, reference, access) = top {
@@ -661,7 +665,11 @@ impl JvmThread {
 	}
 
 	fn execute_istore_x(&self, x: usize, frame: &mut Frame) {
-		println!("Frame before store: {}\n", frame);
+		Debug(
+			format!("Frame before istore_x: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
 		if x < frame.locals.len() {
 			if let Some(top) = frame.operand_stack.pop() {
 				if let JvmValue::Primitive(pt, value, access) = top {
