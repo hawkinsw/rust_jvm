@@ -15,5 +15,4 @@ path = "src/main.rs"
 enum_primitive = "0.1.1"
 num = "0.2.0"
 clap = "2.32"
-arm_and_handler = { git = "http://git.obs.cr/hawkinsw/arm_and_handler" }
-rjar = { git = "http://git.obs.cr/hawkinsw/rjar" }
+rjar = { git = "http://github.com/hawkinsw/rjar" }

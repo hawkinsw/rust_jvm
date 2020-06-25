@@ -20,9 +20,9 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use arm_and_handler::arm;
-use arm_and_handler::arm_and_handler;
-use arm_and_handler::handler;
+//use arm_and_handler::arm;
+//use arm_and_handler::arm_and_handler;
+//use arm_and_handler::handler;
 
 use enum_primitive::FromPrimitive;
 use jvm::class::Class;
