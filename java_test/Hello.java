@@ -6,11 +6,13 @@ public class Hello {
 		throw new java.lang.ArithmeticException();
 	}
 	public static void nothing() {
-		return;
 	}
 
-	public static int something() {
-		return 2;
+	public static int something(Class c) {
+		if (c == Hola.class)
+			return 2;
+		else
+			return 3;
 	}
 
 	public static int sum(int a, int b) {
@@ -34,11 +36,11 @@ public class Hello {
 			 */
 			Hola hola = new Hola();
 			Aloha aloha = hola;
-			b = mult(something(), aloha.say());
+			b = mult(something(Hola.class), aloha.say());
 		} else {
 			b = sum(1, 4);
 		}
 		nothing();
-		//System.out.println("Hello, world");
+		System.out.println("Hello, world");
 	}
 }

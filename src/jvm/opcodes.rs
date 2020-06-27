@@ -31,6 +31,7 @@ enum_from_primitive! {
 		Iconst_4 = 0x7,
 		Iconst_5 = 0x8,
 		Bipush = 0x10,
+		Ldc = 0x12,
 		Iload_0 = 0x1a,
 		Iload_1 = 0x1b,
 		Iload_2 = 0x1c,

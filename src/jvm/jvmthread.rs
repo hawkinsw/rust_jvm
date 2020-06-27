@@ -256,6 +256,11 @@ impl JvmThread {
 				));
 				OpcodeResult::Incr(2)
 			}
+			Some(OperandCode::Ldc) => {
+				Debug(format!("ldc"), &self.debug_level, DebugLevel::Info);
+				self.execute_ldc(bytes, frame);
+				OpcodeResult::Incr(2)
+			}
 			Some(OperandCode::Iload_0) => {
 				Debug(format!("iload_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_iload_x(0, frame);
@@ -657,6 +662,26 @@ impl JvmThread {
 				"locals".to_string(),
 			))
 			.call();
+		}
+	}
+
+	fn execute_ldc(&mut self, bytes: &[u8], frame: &mut Frame) {
+		let class = frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
+		let instantiated_class_index = (bytes[1] as u16) as usize;
+
+		match constant_pool.get_constant_ref(instantiated_class_index) {
+			Constant::String(_, string_index) => {
+				Debug(
+					format!("Frame after ldc: {}", frame),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				//frame.operand_stack.push(frame.locals[x].clone());
+			},
+			_ => {
+
+			}
 		}
 	}
 
