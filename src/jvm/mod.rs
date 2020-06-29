@@ -20,6 +20,7 @@
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
 use std::fmt;
+mod array;
 mod attribute;
 mod class;
 mod classpath;

@@ -19,13 +19,14 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
+use jvm::array::JvmArray;
 use jvm::class::Class;
-use jvm::constantpool::ConstantPool;
 use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
 use jvm::object::JvmObject;
 use std::fmt;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 #[derive(PartialEq, Clone)]
 pub enum JvmPrimitiveType {
@@ -59,6 +60,13 @@ impl fmt::Display for JvmPrimitiveType {
 }
 
 #[derive(Clone)]
+pub enum JvmReferenceTargetType {
+	Array(Arc<Mutex<JvmArray>>),
+	Object(Arc<Mutex<JvmObject>>),
+	Class(Class),
+}
+
+#[derive(Clone)]
 pub enum JvmReferenceType {
 	Array(Rc<JvmType>, u64),
 	Class(String),
@@ -68,9 +76,8 @@ pub enum JvmReferenceType {
 #[derive(Clone)]
 pub enum JvmValue {
 	Primitive(JvmPrimitiveType, u64, u16),
-	Reference(JvmReferenceType, Rc<JvmObject>, u16),
+	Reference(JvmReferenceType, JvmReferenceTargetType, u16),
 }
-
 #[derive(Clone)]
 pub enum JvmType {
 	Primitive(JvmPrimitiveType),
@@ -86,7 +93,7 @@ impl Default for JvmType {
 impl fmt::Display for JvmReferenceType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			JvmReferenceType::Array(_, _) => write!(f, "Array"),
+			JvmReferenceType::Array(_, len) => write!(f, "Array: {}", len),
 			JvmReferenceType::Class(_) => write!(f, "Class"),
 			JvmReferenceType::Interface(_) => write!(f, "Interface"),
 		}
@@ -99,9 +106,16 @@ impl fmt::Display for JvmValue {
 			JvmValue::Primitive(tipe, value, access) => {
 				return write!(f, "Value: {}: {} (access: {:x})", tipe, value, access)
 			}
-			JvmValue::Reference(tipe, value, access) => {
-				return write!(f, "Reference: {}: {} (access: {:x})", tipe, value, access)
-			}
+			JvmValue::Reference(tipe, value, access) => match value {
+				JvmReferenceTargetType::Array(array) => {
+					if let Ok(exclusive_array) = array.lock() {
+						return write!(f, "Reference: {} (access: {:x} of {})", tipe, access, exclusive_array);
+					} else {
+						return write!(f, "Reference: {} (access: {:x})", tipe, access);
+					}
+				}
+				_ => return write!(f, "Reference: {} (access: {:x})", tipe, access),
+			},
 		}
 	}
 }
@@ -161,9 +175,38 @@ impl PartialEq for JvmValue {
 				_ => false,
 			},
 			JvmValue::Reference(t, v, _) => match other {
-				JvmValue::Reference(ot, ov, _) => ot == t && Rc::ptr_eq(ov, v),
+				JvmValue::Reference(ot, ov, _) => ot == t && ov == v,
 				_ => false,
 			},
+		}
+	}
+}
+
+impl PartialEq for JvmReferenceTargetType {
+	fn eq(&self, other: &Self) -> bool {
+		match self {
+			JvmReferenceTargetType::Array(v) => {
+				if let JvmReferenceTargetType::Array(ov) = other {
+					Arc::ptr_eq(ov, v)
+				} else {
+					false
+				}
+			}
+			JvmReferenceTargetType::Object(v) => {
+				if let JvmReferenceTargetType::Object(ov) = other {
+					Arc::ptr_eq(ov, v)
+				} else {
+					false
+				}
+			}
+			JvmReferenceTargetType::Class(v) => {
+				if let JvmReferenceTargetType::Class(ov) = other {
+					v.get_class_name() == ov.get_class_name()
+				} else {
+					false
+				}
+			}
+			_ => false,
 		}
 	}
 }

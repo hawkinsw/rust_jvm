@@ -21,6 +21,7 @@ pub enum FatalErrorType {
 	RecursiveClassInitialization(String, String),
 	MethodExecutionFailed(String),
 	NotImplemented(String),
+	RequiredStackValueNotFound(String),
 }
 
 impl fmt::Display for FatalErrorType {
@@ -74,6 +75,9 @@ impl fmt::Display for FatalErrorType {
 				starting, inprogress
 			),
 			FatalErrorType::NotImplemented(what) => write!(f, "{} not implemented.", what),
+			FatalErrorType::RequiredStackValueNotFound(requirement) => {
+				write!(f, "{} needs a stack value that was not found.", requirement)
+			}
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
 	}

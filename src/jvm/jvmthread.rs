@@ -25,6 +25,8 @@
 //use arm_and_handler::handler;
 
 use enum_primitive::FromPrimitive;
+use jvm::array::JvmArray;
+use jvm::array::JvmArrayType;
 use jvm::class::Class;
 use jvm::class::ClassAccessFlags;
 use jvm::class::ClassInitializationStatus;
@@ -42,6 +44,7 @@ use jvm::methodarea::MethodArea;
 use jvm::object::JvmObject;
 use jvm::opcodes::OperandCode;
 use jvm::typevalues::JvmPrimitiveType;
+use jvm::typevalues::JvmReferenceTargetType;
 use jvm::typevalues::JvmReferenceType;
 use jvm::typevalues::JvmType;
 use jvm::typevalues::JvmValue;
@@ -341,6 +344,11 @@ impl JvmThread {
 				self.execute_astore_x(3, frame);
 				OpcodeResult::Incr(1)
 			}
+			Some(OperandCode::CaStore) => {
+				Debug(format!("castore"), &self.debug_level, DebugLevel::Info);
+				self.execute_castore(frame);
+				OpcodeResult::Incr(1)
+			}
 			Some(OperandCode::Pop) => {
 				Debug(format!("pop"), &self.debug_level, DebugLevel::Info);
 				frame.operand_stack.pop();
@@ -447,6 +455,55 @@ impl JvmThread {
 					);
 				}
 				OpcodeResult::Incr(3)
+			}
+			Some(OperandCode::NewArray) => {
+				Debug(format!("NewArray"), &self.debug_level, DebugLevel::Info);
+				let newarray_len = frame.operand_stack.pop();
+				let newarray_type = bytes[1];
+
+				// First, make sure that there is a reasonable array size on the stack.
+				if let Some(newarray_len) = newarray_len {
+					match newarray_len {
+						JvmValue::Primitive(JvmPrimitiveType::Integer, len, _) => {
+							match JvmArrayType::from_u8(newarray_type) {
+								Some(JvmArrayType::Char) /* Character */ => {
+									frame.operand_stack.push(
+										JvmValue::Reference(
+											JvmReferenceType::Array(Rc::new(JvmType::Primitive(JvmPrimitiveType::Char)), len),
+											JvmReferenceTargetType::Array(Arc::new(Mutex::new(JvmArray::new(len)))),
+											0));
+								},
+								Some(_) => {
+									FatalError::new(FatalErrorType::NotImplemented(
+										format!("Cannot handle new arrays with that type")))
+										.call();
+								}
+								_ => {
+									// We were asked to make an array for an invalid type
+									FatalError::new(FatalErrorType::WrongType(
+										format!("newarray"),
+										format!("JvmArrayType")
+									))
+									.call();
+								}
+							}
+						}
+						_ => {
+							// The value on the stack for the len of the array should be an integer
+							FatalError::new(FatalErrorType::WrongType(
+								format!("newarray"),
+								format!("integer"),
+							))
+							.call();
+						}
+					}
+				} else {
+					FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+						"newarray"
+					)))
+					.call();
+				}
+				OpcodeResult::Incr(2)
 			}
 			_ => {
 				FatalError::new(FatalErrorType::NotImplemented(format!("0x{:x}", opcode))).call();
@@ -618,6 +675,100 @@ impl JvmThread {
 		}
 		OpcodeResult::Incr(pc_incr)
 	}
+	fn execute_castore(&self, frame: &mut Frame) {
+		/*
+		 * From the Java spec:
+		 * stack: arrayref, index, value →
+		 * The arrayref must be of type reference and must refer to an array whose components
+		 * are of type char. The index and the value must both be of type int. The arrayref,
+		 * index, and value are popped from the operand stack. The int value is truncated to a char
+		 * and stored as the component of the array indexed by index.
+		 * */
+
+		let value = frame.operand_stack.pop();
+		let index = frame.operand_stack.pop();
+		let mut arrayref = frame.operand_stack.pop();
+
+		if let Some(value) = value {
+			if let Some(index) = index {
+				if let Some(arrayref) = &mut arrayref {
+					// Check that arrayref is a reference type and that it points to an array of characters.
+					if let JvmValue::Reference(
+						JvmReferenceType::Array(arrayreftype, len),
+						JvmReferenceTargetType::Array(array),
+						array_access,
+					) = &arrayref
+					{
+						if let JvmType::Primitive(JvmPrimitiveType::Char) = **arrayreftype {
+							// check that index and value are integers.
+							if let JvmValue::Primitive(
+								JvmPrimitiveType::Integer,
+								index,
+								index_access,
+							) = index
+							{
+								if let JvmValue::Primitive(
+									JvmPrimitiveType::Integer,
+									value,
+									_len_access,
+								) = value
+								{
+									// All preconditions for this work are met! We can do the work now.
+
+									// Convert the integer from the stack and make it a jvm char value
+
+									let char = JvmValue::Primitive(
+										JvmPrimitiveType::Char,
+										value as u64,
+										0,
+									);
+									if let Ok(mut exclusive_array) = array.lock() {
+										exclusive_array.set_at(index as usize, char);
+										println!("exclusive_array: {}", exclusive_array)
+									} else {
+										FatalError::new(FatalErrorType::CouldNotLock(
+											"Array.".to_string(),
+											"execute_castore".to_string(),
+										))
+										.call();
+									}
+								} else {
+									// value is  wrong type.
+									FatalError::new(FatalErrorType::WrongType(
+										format!("castore value"),
+										format!("Integer"),
+									))
+									.call();
+								}
+							} else {
+								// index is  wrong type.
+								FatalError::new(FatalErrorType::WrongType(
+									format!("castore index"),
+									format!("Integer"),
+								))
+								.call();
+							}
+						} else {
+							// arrayreference is of the wrong type!
+							FatalError::new(FatalErrorType::WrongType(
+								format!("castore array reference not character reference"),
+								format!("Integer"),
+							))
+							.call();
+							// Yes, it is a reference but not to a character array
+						}
+					} else {
+						// arrayreference is of the wrong type!
+						FatalError::new(FatalErrorType::WrongType(
+							format!("castore array reference"),
+							format!("Integer"),
+						))
+						.call();
+					}
+				}
+			}
+		}
+	}
 
 	fn execute_astore_x(&self, x: usize, frame: &mut Frame) {
 		Debug(
@@ -678,10 +829,8 @@ impl JvmThread {
 					DebugLevel::Info,
 				);
 				//frame.operand_stack.push(frame.locals[x].clone());
-			},
-			_ => {
-
 			}
+			_ => {}
 		}
 	}
 
@@ -979,7 +1128,7 @@ impl JvmThread {
 							object.instantiate();
 							result = Some(JvmValue::Reference(
 								JvmReferenceType::Class(instantiated_class_name.to_string()),
-								Rc::new(object),
+								JvmReferenceTargetType::Object(Arc::new(Mutex::new(object))),
 								0,
 							));
 						} else {

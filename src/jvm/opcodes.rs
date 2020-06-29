@@ -48,6 +48,7 @@ enum_from_primitive! {
 		Astore_1 = 0x4c,
 		Astore_2 = 0x4d,
 		Astore_3 = 0x4e,
+		CaStore = 0x55,
 		Pop = 0x57,
 		Dup = 0x59,
 		Iadd = 0x60,
@@ -66,5 +67,6 @@ enum_from_primitive! {
 		Invokespecial = 0xb7,
 		Invokestatic = 0xb8,
 		New = 0xbb,
+		NewArray = 0xbc,
 	}
 }
