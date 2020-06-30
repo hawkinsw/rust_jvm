@@ -708,11 +708,7 @@ impl JvmThread {
 					) => {
 						if let JvmType::Primitive(JvmPrimitiveType::Char) = **arrayreftype {
 							// The index must be a Primitive Integer.
-							if let JvmValue::Primitive(
-								JvmPrimitiveType::Integer,
-								index,
-								_,
-							) = index
+							if let JvmValue::Primitive(JvmPrimitiveType::Integer, index, _) = index
 							{
 								// We need a lock even though we are just reading.
 								if let Ok(mut exclusive_array) = array.lock() {
@@ -1416,9 +1412,12 @@ impl JvmThread {
 		source_frame: &mut Frame,
 	) -> Option<OpcodeResult> {
 		let class = source_frame.class().unwrap();
-		let constant_pool = class.get_constant_pool_ref();
+		let _constant_pool = class.get_constant_pool_ref();
 		let method_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
+		// First, find out what method we are supposed to invoke. It is given by the index
+		// to the instruction. That index refers to the constant pool of the class whose
+		// code the JVM is currently executing.
 		if let Some((method_name, method_type, invoked_class_name)) =
 			class.resolve_method_ref(method_index)
 		{
@@ -1432,6 +1431,8 @@ impl JvmThread {
 				DebugLevel::Info,
 			);
 
+			// We know the names of the method (and its class) that we are supposed to execute.
+			// Now we need to resolve those so that we can actually execute them.
 			if let Ok(mut methodarea) = self.methodarea.lock() {
 				(*methodarea).maybe_load_class(&invoked_class_name);
 				invoked_class = (*methodarea).get_class_rc(&invoked_class_name);
@@ -1442,6 +1443,7 @@ impl JvmThread {
 				};
 			}
 
+			// If that resolution process was successful, we will have a class and a method.
 			if let (Some(invoked_class), Some(resolved_method)) = (invoked_class, resolved_method) {
 				let mut object_class_name: Option<String> = None;
 
@@ -1449,7 +1451,8 @@ impl JvmThread {
 					// We know how to execute non-native methods.
 
 					/*
-						* Let's build a frame!
+						* Let's build a frame! Values from the stack will become local variables when we start
+						* executing the invoked method.
 						*/
 					if !move_parameters_to_locals(
 						&resolved_method,
@@ -1457,26 +1460,33 @@ impl JvmThread {
 						&mut invoked_frame,
 					) {
 						FatalError::new(FatalErrorType::NotEnough(
-							"invokevirtual".to_string(),
+							format!("invokevirtual"),
 							resolved_method.parameter_count,
-							"stack operands".to_string(),
+							format!("stack operands"),
 						))
 						.call();
 					}
 					/*
 						* The first value on the stack is an object reference. It becomes
-						* the 0th local variable to the special method.
+						* the 0th local variable to the invoked method.
 						*/
 					if let Some(top) = source_frame.operand_stack.pop() {
 						if let JvmValue::Reference(JvmReferenceType::Class(ocn), _, _) = &top {
 							object_class_name = Some(ocn.to_string());
 							invoked_frame.locals.insert(0, top);
 						} else {
-							/*
-								* TODO: This is a fatal error: The first value on
-								* the stack at this point must be a reference.
-								*/
+							FatalError::new(FatalErrorType::WrongType(
+								format!("execute_invokevirtual"),
+								format!("Reference"),
+							))
+							.call();
 						}
+					} else {
+						// Missing a reference on the top of the stack to an object upon which to invoke this method
+						FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+							"Reference to an object."
+						)))
+						.call();
 					}
 
 					/*
