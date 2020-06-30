@@ -36,12 +36,12 @@ enum_from_primitive! {
 	}
 }
 pub struct JvmArray {
-	dimension: u64,
+	dimension: usize,
 	values: Vec<Option<JvmValue>>,
 }
 
 impl JvmArray {
-	pub fn new(dimension: u64) -> Self {
+	pub fn new(dimension: usize) -> Self {
 		let mut res = JvmArray {
 			dimension,
 			values: vec![],
@@ -49,6 +49,11 @@ impl JvmArray {
 		res.values.resize(dimension as usize, None);
 		res
 	}
+
+	pub fn inbounds(&self, index: usize) -> bool {
+		index <= self.dimension
+	}
+
 	pub fn push(&mut self, value: JvmValue) {
 		self.values.push(Some(value));
 	}

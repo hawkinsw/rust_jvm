@@ -40,6 +40,7 @@ enum_from_primitive! {
 		Aload_1 = 0x2b,
 		Aload_2 = 0x2c,
 		Aload_3 = 0x2d,
+		CaLoad = 0x34,
 		Istore_0 = 0x3b,
 		Istore_1 = 0x3c,
 		Istore_2 = 0x3d,

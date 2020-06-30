@@ -43,6 +43,7 @@ use jvm::methodarea::LoadedClass;
 use jvm::methodarea::MethodArea;
 use jvm::object::JvmObject;
 use jvm::opcodes::OperandCode;
+use jvm::typevalues::create_null_value;
 use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmReferenceTargetType;
 use jvm::typevalues::JvmReferenceType;
@@ -62,6 +63,7 @@ pub struct JvmThread {
 }
 
 enum OpcodeResult {
+	Exception,
 	Incr(usize),
 	Value(JvmValue),
 }
@@ -196,6 +198,13 @@ impl JvmThread {
 				match self.execute_opcode(&code[pc..], &mut frame) {
 					OpcodeResult::Incr(incr) => pc_incr = incr,
 					OpcodeResult::Value(v) => return Some(v),
+					OpcodeResult::Exception => {
+						/*
+						 * TODO: Handle exceptions!
+						 */
+						FatalError::new(FatalErrorType::NotImplemented(format!("Exceptions.")))
+							.call();
+					}
 				};
 				pc += pc_incr;
 				pc_incr != 0
@@ -302,6 +311,11 @@ impl JvmThread {
 			Some(OperandCode::Aload_3) => {
 				Debug(format!("aload_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_aload_x(3, frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::CaLoad) => {
+				Debug(format!("caload"), &self.debug_level, DebugLevel::Info);
+				self.execute_caload(frame);
 				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Istore_0) => {
@@ -470,7 +484,7 @@ impl JvmThread {
 									frame.operand_stack.push(
 										JvmValue::Reference(
 											JvmReferenceType::Array(Rc::new(JvmType::Primitive(JvmPrimitiveType::Char)), len),
-											JvmReferenceTargetType::Array(Arc::new(Mutex::new(JvmArray::new(len)))),
+											JvmReferenceTargetType::Array(Arc::new(Mutex::new(JvmArray::new(len as usize)))),
 											0));
 								},
 								Some(_) => {
@@ -675,6 +689,134 @@ impl JvmThread {
 		}
 		OpcodeResult::Incr(pc_incr)
 	}
+
+	fn execute_caload(&mut self, frame: &mut Frame) {
+		let index = frame.operand_stack.pop();
+		let mut arrayref = frame.operand_stack.pop();
+
+		if let Some(index) = index {
+			if let Some(arrayref) = &mut arrayref {
+				// The array reference must:
+				// 1. be a non-null reference
+				// 2. point to an array of characters.
+				// Check (1) first ...
+				match &arrayref {
+					JvmValue::Reference(
+						JvmReferenceType::Array(arrayreftype, _),
+						JvmReferenceTargetType::Array(array),
+						_,
+					) => {
+						if let JvmType::Primitive(JvmPrimitiveType::Char) = **arrayreftype {
+							// The index must be a Primitive Integer.
+							if let JvmValue::Primitive(
+								JvmPrimitiveType::Integer,
+								index,
+								_,
+							) = index
+							{
+								// We need a lock even though we are just reading.
+								if let Ok(mut exclusive_array) = array.lock() {
+									// Check that the access is inbounds.
+									if exclusive_array.inbounds(index as usize) {
+										if let Some(value) = exclusive_array.get_at(index as usize)
+										{
+											if let JvmValue::Primitive(
+												JvmPrimitiveType::Char,
+												char,
+												char_access,
+											) = *value
+											{
+												let integer = JvmValue::Primitive(
+													JvmPrimitiveType::Integer,
+													char as u64,
+													char_access,
+												);
+												frame.operand_stack.push(integer);
+											} else {
+												// The value that we retrieved from the array *should* be a character,
+												// but it is not.
+												FatalError::new(FatalErrorType::WrongType(
+													format!("caload loaded value from array"),
+													format!("Primitive Character"),
+												))
+												.call();
+											}
+										} else {
+											// The value that we retrieved from the array *should* be a character,
+											// but it was empty.
+											FatalError::new(FatalErrorType::WrongType(
+												format!("caload loaded value from array"),
+												format!("Primitive Character"),
+											))
+											.call();
+										}
+									} else {
+										// The load is from a position outside the size of the array.
+										FatalError::new(FatalErrorType::NotImplemented(format!(
+											"Index out of bounds exception."
+										)))
+										.call();
+									}
+								} else {
+									FatalError::new(FatalErrorType::CouldNotLock(
+										format!("Array."),
+										format!("execute_caload"),
+									))
+									.call();
+								}
+							} else {
+								// index is wrong type.
+								FatalError::new(FatalErrorType::WrongType(
+									format!("caload index"),
+									format!("Integer"),
+								))
+								.call();
+							}
+						} else {
+							// Yes, it is a reference but not to a character array
+							FatalError::new(FatalErrorType::WrongType(
+								format!("caload array reference not character reference"),
+								format!("Integer"),
+							))
+							.call();
+						}
+					}
+					JvmValue::Reference(
+						JvmReferenceType::Null,
+						JvmReferenceTargetType::Null,
+						_,
+					) => {
+						// arrayreference is Null!
+						FatalError::new(FatalErrorType::WrongType(
+							format!("caload Null Pointer Exception"),
+							format!("Null"),
+						))
+						.call();
+					}
+					_ => {
+						// arrayreference is of the wrong type!
+						FatalError::new(FatalErrorType::WrongType(
+							format!("caload array reference"),
+							format!("Reference to an array"),
+						))
+						.call();
+					}
+				}
+			} else {
+				// Missing a reference to an array on the stack.
+				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+					"Reference to an array."
+				)))
+				.call();
+			}
+		} else {
+			// Missing an index on the stack.
+			FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+				"Primitive"
+			)))
+			.call();
+		}
+	}
 	fn execute_castore(&self, frame: &mut Frame) {
 		/*
 		 * From the Java spec:
@@ -685,28 +827,29 @@ impl JvmThread {
 		 * and stored as the component of the array indexed by index.
 		 * */
 
+		// Pull the three things on the top of the stack.
 		let value = frame.operand_stack.pop();
 		let index = frame.operand_stack.pop();
 		let mut arrayref = frame.operand_stack.pop();
 
 		if let Some(value) = value {
 			if let Some(index) = index {
-				if let Some(arrayref) = &mut arrayref {
-					// Check that arrayref is a reference type and that it points to an array of characters.
-					if let JvmValue::Reference(
-						JvmReferenceType::Array(arrayreftype, len),
+				match &mut arrayref {
+					// The array reference must:
+					// 1. be a non-null reference
+					// 2. point to an array of characters.
+					// Check (1) first ...
+					Some(JvmValue::Reference(
+						JvmReferenceType::Array(arrayreftype, _),
 						JvmReferenceTargetType::Array(array),
-						array_access,
-					) = &arrayref
-					{
+						_,
+					)) => {
+						// Check (2) second ...
 						if let JvmType::Primitive(JvmPrimitiveType::Char) = **arrayreftype {
-							// check that index and value are integers.
-							if let JvmValue::Primitive(
-								JvmPrimitiveType::Integer,
-								index,
-								index_access,
-							) = index
+							// The index must be a primitive Integer.
+							if let JvmValue::Primitive(JvmPrimitiveType::Integer, index, _) = index
 							{
+								// Finally, the value must be a primitive Integer.
 								if let JvmValue::Primitive(
 									JvmPrimitiveType::Integer,
 									value,
@@ -716,32 +859,48 @@ impl JvmThread {
 									// All preconditions for this work are met! We can do the work now.
 
 									// Convert the integer from the stack and make it a jvm char value
-
-									let char = JvmValue::Primitive(
+									let value_as_character = JvmValue::Primitive(
 										JvmPrimitiveType::Char,
 										value as u64,
 										0,
 									);
+
+									// Since we are writing to the array, we need exclusive access to it.
 									if let Ok(mut exclusive_array) = array.lock() {
-										exclusive_array.set_at(index as usize, char);
-										println!("exclusive_array: {}", exclusive_array)
+										// Check to make sure that the array access is inbounds.
+										if exclusive_array.inbounds(index as usize) {
+											// Write to the array with the new value.
+											exclusive_array
+												.set_at(index as usize, value_as_character);
+										} else {
+											// array index out of bounds exception.
+											FatalError::new(FatalErrorType::WrongType(
+												format!(
+													"castore array index out of bounds exception"
+												),
+												format!("Null"),
+											))
+											.call();
+										}
 									} else {
+										// We could not get an exclusive lock on the array to which we are
+										// writing.
 										FatalError::new(FatalErrorType::CouldNotLock(
-											"Array.".to_string(),
-											"execute_castore".to_string(),
+											format!("Array."),
+											format!("execute_castore"),
 										))
 										.call();
 									}
 								} else {
-									// value is  wrong type.
+									// value should be a character but it is not.
 									FatalError::new(FatalErrorType::WrongType(
 										format!("castore value"),
-										format!("Integer"),
+										format!("Character"),
 									))
 									.call();
 								}
 							} else {
-								// index is  wrong type.
+								// index should be a primitive Integer but it is not.
 								FatalError::new(FatalErrorType::WrongType(
 									format!("castore index"),
 									format!("Integer"),
@@ -749,24 +908,49 @@ impl JvmThread {
 								.call();
 							}
 						} else {
-							// arrayreference is of the wrong type!
+							// What should be an a reference to an array of characters
+							// is an array reference but it does not refer to array of characters.
 							FatalError::new(FatalErrorType::WrongType(
-								format!("castore array reference not character reference"),
-								format!("Integer"),
+								format!("castore arrayreference"),
+								format!("reference to an array of characters"),
 							))
 							.call();
-							// Yes, it is a reference but not to a character array
 						}
-					} else {
-						// arrayreference is of the wrong type!
+					}
+					Some(JvmValue::Reference(
+						JvmReferenceType::Null,
+						JvmReferenceTargetType::Null,
+						_,
+					)) => {
+						// What should be a reference to an array of characters is Null.
 						FatalError::new(FatalErrorType::WrongType(
-							format!("castore array reference"),
-							format!("Integer"),
+							format!("castore null pointer exception"),
+							format!("Null"),
+						))
+						.call();
+					}
+					_ => {
+						// What should be an a reference to an array of characters is not even a reference.
+						FatalError::new(FatalErrorType::WrongType(
+							format!("castore arrayreference"),
+							format!("reference to an array"),
 						))
 						.call();
 					}
 				}
+			} else {
+				// Missing an index on the stack.
+				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+					"Reference to an array."
+				)))
+				.call();
 			}
+		} else {
+			// Missing a value on the stack.
+			FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+				"Primitive"
+			)))
+			.call();
 		}
 	}
 

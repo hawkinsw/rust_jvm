@@ -61,6 +61,7 @@ impl fmt::Display for JvmPrimitiveType {
 
 #[derive(Clone)]
 pub enum JvmReferenceTargetType {
+	Null,
 	Array(Arc<Mutex<JvmArray>>),
 	Object(Arc<Mutex<JvmObject>>),
 	Class(Class),
@@ -68,6 +69,7 @@ pub enum JvmReferenceTargetType {
 
 #[derive(Clone)]
 pub enum JvmReferenceType {
+	Null,
 	Array(Rc<JvmType>, u64),
 	Class(String),
 	Interface(String),
@@ -78,6 +80,11 @@ pub enum JvmValue {
 	Primitive(JvmPrimitiveType, u64, u16),
 	Reference(JvmReferenceType, JvmReferenceTargetType, u16),
 }
+
+pub fn create_null_value() -> JvmValue {
+	JvmValue::Reference(JvmReferenceType::Null, JvmReferenceTargetType::Null, 0)
+}
+
 #[derive(Clone)]
 pub enum JvmType {
 	Primitive(JvmPrimitiveType),
@@ -93,6 +100,7 @@ impl Default for JvmType {
 impl fmt::Display for JvmReferenceType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
+			JvmReferenceType::Null => write!(f, "Null"),
 			JvmReferenceType::Array(_, len) => write!(f, "Array: {}", len),
 			JvmReferenceType::Class(_) => write!(f, "Class"),
 			JvmReferenceType::Interface(_) => write!(f, "Interface"),
@@ -109,7 +117,11 @@ impl fmt::Display for JvmValue {
 			JvmValue::Reference(tipe, value, access) => match value {
 				JvmReferenceTargetType::Array(array) => {
 					if let Ok(exclusive_array) = array.lock() {
-						return write!(f, "Reference: {} (access: {:x} of {})", tipe, access, exclusive_array);
+						return write!(
+							f,
+							"Reference: {} (access: {:x} of {})",
+							tipe, access, exclusive_array
+						);
 					} else {
 						return write!(f, "Reference: {} (access: {:x})", tipe, access);
 					}
