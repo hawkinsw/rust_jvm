@@ -417,6 +417,11 @@ impl JvmThread {
 				}
 				OpcodeResult::Incr(3)
 			}
+			Some(OperandCode::PutField) => {
+				Debug(format!("putfield"), &self.debug_level, DebugLevel::Info);
+				self.execute_putfield(((bytes[1] as u16) << 8) | (bytes[2] as u16) as u16, frame);
+				OpcodeResult::Incr(3)
+			}
 			Some(OperandCode::Invokevirtual) => {
 				Debug(
 					format!("invokevirtual"),
@@ -1387,6 +1392,10 @@ impl JvmThread {
 		}
 		println!("For some reason we are returning None!");
 		return None;
+	}
+
+	fn execute_putfield(&mut self, index: u16, frame: &mut Frame) {
+		FatalError::new(FatalErrorType::NotImplemented(format!("execute_putfield"))).call();
 	}
 
 	fn execute_invokevirtual(

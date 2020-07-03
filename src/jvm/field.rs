@@ -25,6 +25,7 @@ use jvm::constantpool::ConstantPool;
 use jvm::typevalues::JvmValue;
 use std::fmt;
 use std::iter::repeat;
+use std::rc::Rc;
 
 #[repr(u16)]
 pub enum FieldAccessFlags {
@@ -47,6 +48,7 @@ pub struct Field {
 	pub descriptor_index: u16,
 	pub attributes_count: u16,
 	pub attributes: Attributes,
+	pub value: Option<Rc<JvmValue>>,
 }
 
 impl Field {
@@ -91,6 +93,7 @@ impl<'l> From<&'l Vec<u8>> for Field {
 			descriptor_index,
 			attributes_count: attributes.attributes_count(),
 			attributes,
+			value: None,
 		}
 	}
 }
