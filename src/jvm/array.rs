@@ -51,7 +51,7 @@ impl JvmArray {
 	}
 
 	pub fn inbounds(&self, index: usize) -> bool {
-		index <= self.dimension
+		index < self.dimension
 	}
 
 	pub fn push(&mut self, value: JvmValue) {
