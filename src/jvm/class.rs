@@ -19,6 +19,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
+use jvm::methodarea::MethodArea;
 use jvm::attribute::Attributes;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
@@ -90,6 +91,25 @@ impl Class {
 			}
 		}
 		superclass_name
+	}
+
+	pub fn superclass_name(&self) -> Option<String> {
+		self.resolve_superclass()
+	}
+
+	pub fn is_type_of(&self, r#type: &String, methodarea: &mut MethodArea) -> bool {
+		if self.get_class_name().unwrap() == *r#type {
+			true
+		} else if let Some(parent_name) = self.superclass_name() {
+			methodarea.maybe_load_class(&parent_name);
+			if let Some(super_class) = methodarea.get_loaded_class(&parent_name) {
+				(*super_class).class.is_type_of(r#type, methodarea)
+			} else {
+				false
+			}
+		} else {
+			false
+		}
 	}
 
 	pub fn resolve_field_ref(&self, field_ref_index: usize) -> Option<(String, String, String)> {
