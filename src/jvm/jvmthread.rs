@@ -753,7 +753,10 @@ impl JvmThread {
 										}
 									} else {
 										// The load is from a position outside the size of the array.
-										FatalError::new(FatalErrorType::Exception(format!("IndexOutOfBounds"))).call();
+										FatalError::new(FatalErrorType::Exception(format!(
+											"IndexOutOfBounds"
+										)))
+										.call();
 									}
 								} else {
 									FatalError::new(FatalErrorType::CouldNotLock(
@@ -785,7 +788,8 @@ impl JvmThread {
 						_,
 					) => {
 						// arrayreference is Null!
-						FatalError::new(FatalErrorType::Exception(format!("NullPointerException"))).call();
+						FatalError::new(FatalErrorType::Exception(format!("NullPointerException")))
+							.call();
 					}
 					_ => {
 						// arrayreference is of the wrong type!
@@ -868,7 +872,10 @@ impl JvmThread {
 												.set_at(index as usize, value_as_character);
 										} else {
 											// array index out of bounds exception.
-											FatalError::new(FatalErrorType::Exception(format!("IndexOutOfBounds"))).call();
+											FatalError::new(FatalErrorType::Exception(format!(
+												"IndexOutOfBounds"
+											)))
+											.call();
 										}
 									} else {
 										// We could not get an exclusive lock on the array to which we are
@@ -911,7 +918,8 @@ impl JvmThread {
 						_,
 					)) => {
 						// What should be a reference to an array of characters is Null.
-						FatalError::new(FatalErrorType::Exception(format!("NullPointerException"))).call();
+						FatalError::new(FatalErrorType::Exception(format!("NullPointerException")))
+							.call();
 					}
 					_ => {
 						// What should be an a reference to an array of characters is not even a reference.

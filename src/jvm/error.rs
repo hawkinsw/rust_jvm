@@ -79,9 +79,7 @@ impl fmt::Display for FatalErrorType {
 			FatalErrorType::RequiredStackValueNotFound(requirement) => {
 				write!(f, "{} needs a stack value that was not found.", requirement)
 			}
-			FatalErrorType::Exception(exception_type) => {
-				write!(f, "Exception: {}", exception_type)
-			}
+			FatalErrorType::Exception(exception_type) => write!(f, "Exception: {}", exception_type),
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
 	}

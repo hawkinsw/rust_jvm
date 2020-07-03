@@ -19,13 +19,13 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
-use jvm::methodarea::MethodArea;
 use jvm::attribute::Attributes;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
 use jvm::field::Fields;
 use jvm::method::Method;
 use jvm::method::Methods;
+use jvm::methodarea::MethodArea;
 use std::fmt;
 use std::fs;
 use std::io::Read;
