@@ -5,7 +5,7 @@ test: all
 	./target/debug/jvm -c ./java_test/ Hello main
 
 test-debug: all
-	./target/debug/jvm -d -c ./java_test/ Hello main
+	./target/debug/jvm -d -c ./java_test/ Exceptional main
 	#./target/debug/jvm -d -c ./java_test/:/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/rt.jar Hello main
 
 test-debug-debug: all

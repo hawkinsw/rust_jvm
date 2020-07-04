@@ -1403,6 +1403,82 @@ impl JvmThread {
 	}
 
 	fn execute_putfield(&mut self, index: u16, frame: &mut Frame) {
+		/*
+		 * 1.
+		 */
+		let class = frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
+		let field_index = index as usize;
+
+		let value = frame.operand_stack.pop();
+		let objectref = frame.operand_stack.pop();
+
+		if let Some(value) = value {
+			if let Some(objectref) = objectref {
+				if let Constant::Fieldref(_, class_ref, name_and_type_ref) =
+					constant_pool.get_constant_ref(field_index)
+				{
+					// Let's get the name and the type of the field!
+
+					// Let's get the class name
+					let mut field_class_name = None;
+					let mut field_name = None;
+					let mut field_type = None;
+
+					if let Constant::Class(_, class_name_index) =
+						constant_pool.get_constant_ref(*class_ref as usize)
+					{
+						if let Constant::Utf8(_, _, _, class_name) =
+							constant_pool.get_constant_ref(*class_name_index as usize)
+						{
+							// class_name is the name of the class where the field exists.
+							field_class_name = Some(class_name);
+						}
+					}
+
+					if let Constant::NameAndType(_, field_name_index, field_type_index) =
+						constant_pool.get_constant_ref(*name_and_type_ref as usize)
+					{
+						if let Constant::Utf8(_, _, _, field_name_constant) =
+							constant_pool.get_constant_ref(*field_name_index as usize)
+						{
+							field_name = Some(field_name_constant);
+						}
+						if let Constant::Utf8(_, _, _, field_type_constant) =
+							constant_pool.get_constant_ref(*field_type_index as usize)
+						{
+							field_type = Some(field_type_constant);
+						}
+					}
+
+					println!("field_class_name: {}", field_class_name.unwrap());
+					println!("field_name: {}", field_name.unwrap());
+					println!("field_type: {}", field_type.unwrap());
+
+					if let JvmValue::Reference(
+						JvmReferenceType::Class(objectref_class_name),
+						JvmReferenceTargetType::Object(objectref_object),
+						_,
+					) = objectref
+					{
+						println!("objectref_class_name: {}", objectref_class_name);
+						if let Ok(objectref_object) = objectref_object.lock() {
+							if let Ok(mut methodarea) = self.methodarea.lock() {
+								if objectref_object
+									.get_class()
+									.is_type_of(field_class_name.unwrap(), &mut *methodarea)
+								{
+									println!("Success?");
+								}
+							}
+						}
+					} else {
+						// Object ref ahs to be a classref.
+					}
+				}
+			}
+		}
+
 		FatalError::new(FatalErrorType::NotImplemented(format!("execute_putfield"))).call();
 	}
 

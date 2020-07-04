@@ -46,6 +46,23 @@ impl JvmObject {
 			fields: HashMap::<String, Rc<JvmValue>>::new(),
 		}
 	}
+
+	pub fn get_class(&self) -> Rc<Class> {
+		Rc::clone(&self.class)
+	}
+
+	pub fn set_field(&mut self, field_name: &String, value: Rc<JvmValue>) {
+		self.fields.insert(field_name.clone(), value);
+	}
+
+	pub fn get_field(&mut self, field_name: &String, value: Rc<JvmValue>) -> Option<Rc<JvmValue>> {
+		if let Some(field_value) = self.fields.get(field_name) {
+			Some(Rc::clone(field_value))
+		} else {
+			None
+		}
+	}
+
 	pub fn instantiate(&mut self) -> bool {
 		let fields = self.class.get_fields_ref();
 		let constantpool = self.class.get_constant_pool_ref();
