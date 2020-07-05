@@ -84,6 +84,11 @@ pub fn move_parameters_to_locals(
 }
 
 impl JvmThread {
+
+	pub fn debug_level(&self) -> DebugLevel {
+		self.debug_level.clone()
+	}
+
 	pub fn new(debug_level: DebugLevel, methodarea: Arc<Mutex<MethodArea>>) -> Self {
 		JvmThread {
 			debug_level: debug_level,
@@ -1045,7 +1050,7 @@ impl JvmThread {
 			.push(JvmValue::Primitive(JvmPrimitiveType::Integer, x as u64, 0));
 	}
 
-	fn maybe_initialize_class(&mut self, class: &Rc<Class>) {
+	pub fn maybe_initialize_class(&mut self, class: &Rc<Class>) {
 		/*
 		 * Get the class' name and fail if we cannot.
 		 */
@@ -1299,9 +1304,12 @@ impl JvmThread {
 						if let Some(instantiated_class) = instantiated_class {
 							self.maybe_initialize_class(&instantiated_class);
 
-							let mut object = JvmObject::new(instantiated_class);
+							let mut object = JvmObject::new(instantiated_class, self.debug_level.clone());
 
-							object.instantiate();
+							object.instantiate(self, Arc::clone(&self.methodarea));
+
+							println!("hierarchy: {}", object.hierarchy());
+
 							result = Some(JvmValue::Reference(
 								JvmReferenceType::Class(instantiated_class_name.to_string()),
 								JvmReferenceTargetType::Object(Arc::new(Mutex::new(object))),

@@ -26,8 +26,13 @@ use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
 use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmReferenceType;
+use jvm::typevalues::JvmReferenceTargetType;
 use jvm::typevalues::JvmType;
 use jvm::typevalues::JvmValue;
+use jvm::jvmthread::JvmThread;
+use jvm::methodarea::MethodArea;
+use jvm::debug::{Debug, DebugLevel};
+use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
@@ -39,11 +44,12 @@ pub struct JvmObject {
 }
 
 impl JvmObject {
-	pub fn new(class: Rc<Class>) -> Self {
+	pub fn new(class: Rc<Class>, debug_level: DebugLevel) -> Self {
 		JvmObject {
 			spr: None,
 			class: class,
 			fields: HashMap::<String, Rc<JvmValue>>::new(),
+			debug_level
 		}
 	}
 
@@ -55,7 +61,7 @@ impl JvmObject {
 		self.fields.insert(field_name.clone(), value);
 	}
 
-	pub fn get_field(&mut self, field_name: &String, value: Rc<JvmValue>) -> Option<Rc<JvmValue>> {
+	pub fn get_field(&mut self, field_name: &String) -> Option<Rc<JvmValue>> {
 		if let Some(field_value) = self.fields.get(field_name) {
 			Some(Rc::clone(field_value))
 		} else {
@@ -63,7 +69,15 @@ impl JvmObject {
 		}
 	}
 
-	pub fn instantiate(&mut self) -> bool {
+	pub fn hierarchy(&self) -> String {
+		let mut result = self.class.get_class_name().unwrap();
+		if let Some(spr) = &self.spr {
+			result = format!("{}, {}", result, spr.hierarchy());
+		}
+		result
+	}
+
+	pub fn instantiate(&mut self, initializing_thread: &mut JvmThread, methodarea: Arc<Mutex<MethodArea>>) -> bool {
 		let fields = self.class.get_fields_ref();
 		let constantpool = self.class.get_constant_pool_ref();
 
@@ -130,6 +144,58 @@ impl JvmObject {
 		/*
 		 * TODO: Handle superclass instantiation!
 		 */
+		if let Some(superclass_name) = self.class.resolve_superclass() {
+			// We have a superclass and we know it's name.
+			Debug(
+				format!("Make a new superclass of {}.", superclass_name),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
+
+			/*
+			 * TODO: Let this go all the way to object!
+			 */
+
+			if superclass_name == format!("java/lang/Object") {
+				Debug(
+					format!("Not making the base class java/lang/Object"),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				return true;
+			}
+
+			let mut instantiated_class: Option<Rc<Class>> = None;
+			if let Ok(mut methodarea) = methodarea.lock() {
+				(*methodarea).maybe_load_class(&superclass_name);
+				instantiated_class =
+					(*methodarea).get_class_rc(&superclass_name);
+			} else {
+				FatalError::new(FatalErrorType::CouldNotLock(
+					"Method Area.".to_string(),
+					"instantiate".to_string(),
+				))
+				.call();
+			}
+			if let Some(instantiated_class) = instantiated_class {
+				initializing_thread.maybe_initialize_class(&instantiated_class);
+
+				let mut object = JvmObject::new(instantiated_class, self.debug_level.clone());
+
+				object.instantiate(initializing_thread, Arc::clone(&methodarea));
+				self.spr = Some(Rc::new(object));
+				Debug(
+					format!("Made a new superclass of {}.", superclass_name),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+			} else {
+				FatalError::new(FatalErrorType::ClassNotLoaded(
+					superclass_name.to_string(),
+				))
+				.call();
+			}
+		}
 		true
 	}
 }
