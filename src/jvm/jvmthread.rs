@@ -41,7 +41,7 @@ use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
 use jvm::methodarea::LoadedClass;
 use jvm::methodarea::MethodArea;
-use jvm::object::JvmObject;
+use jvm::object::{create_static_string_object, JvmObject};
 use jvm::opcodes::OperandCode;
 use jvm::typevalues::create_null_value;
 use jvm::typevalues::JvmPrimitiveType;
@@ -1304,7 +1304,8 @@ impl JvmThread {
 						if let Some(instantiated_class) = instantiated_class {
 							self.maybe_initialize_class(&instantiated_class);
 
-							let mut object = JvmObject::new(instantiated_class, self.debug_level.clone());
+							let mut object =
+								JvmObject::new(instantiated_class, self.debug_level.clone());
 
 							object.instantiate(self, Arc::clone(&self.methodarea));
 

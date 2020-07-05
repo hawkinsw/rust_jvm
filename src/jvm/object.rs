@@ -49,7 +49,7 @@ impl JvmObject {
 			spr: None,
 			class: class,
 			fields: HashMap::<String, Rc<JvmValue>>::new(),
-			debug_level
+			debug_level,
 		}
 	}
 
@@ -77,7 +77,21 @@ impl JvmObject {
 		result
 	}
 
-	pub fn instantiate(&mut self, initializing_thread: &mut JvmThread, methodarea: Arc<Mutex<MethodArea>>) -> bool {
+	pub fn is_type_of(&self, r#type: &String) -> bool {
+		if self.class.get_class_name().unwrap() == *r#type {
+			true
+		} else if let Some(spr) = &self.spr {
+			spr.is_type_of(r#type)
+		} else {
+			false
+		}
+	}
+
+	pub fn instantiate(
+		&mut self,
+		initializing_thread: &mut JvmThread,
+		methodarea: Arc<Mutex<MethodArea>>,
+	) -> bool {
 		let fields = self.class.get_fields_ref();
 		let constantpool = self.class.get_constant_pool_ref();
 
@@ -168,8 +182,7 @@ impl JvmObject {
 			let mut instantiated_class: Option<Rc<Class>> = None;
 			if let Ok(mut methodarea) = methodarea.lock() {
 				(*methodarea).maybe_load_class(&superclass_name);
-				instantiated_class =
-					(*methodarea).get_class_rc(&superclass_name);
+				instantiated_class = (*methodarea).get_class_rc(&superclass_name);
 			} else {
 				FatalError::new(FatalErrorType::CouldNotLock(
 					"Method Area.".to_string(),
@@ -190,10 +203,7 @@ impl JvmObject {
 					DebugLevel::Info,
 				);
 			} else {
-				FatalError::new(FatalErrorType::ClassNotLoaded(
-					superclass_name.to_string(),
-				))
-				.call();
+				FatalError::new(FatalErrorType::ClassNotLoaded(superclass_name.to_string())).call();
 			}
 		}
 		true
