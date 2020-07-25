@@ -22,25 +22,46 @@
 use jvm::class::Class;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
+use jvm::debug::{Debug, DebugLevel};
 use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
-use jvm::typevalues::JvmPrimitiveType;
-use jvm::typevalues::JvmReferenceType;
-use jvm::typevalues::JvmReferenceTargetType;
-use jvm::typevalues::JvmType;
-use jvm::typevalues::JvmValue;
 use jvm::jvmthread::JvmThread;
 use jvm::methodarea::MethodArea;
-use jvm::debug::{Debug, DebugLevel};
-use std::sync::{Arc, Mutex};
+use jvm::typevalues::JvmPrimitiveType;
+use jvm::typevalues::JvmReferenceTargetType;
+use jvm::typevalues::JvmReferenceType;
+use jvm::typevalues::JvmType;
+use jvm::typevalues::JvmValue;
 use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 pub struct JvmObject {
 	spr: Option<Rc<JvmObject>>,
 	class: Rc<Class>,
 	fields: HashMap<String, Rc<JvmValue>>,
+	debug_level: DebugLevel,
+}
+
+pub fn create_static_string_object(
+	value: String,
+	thread: &JvmThread,
+	methodarea: Arc<Mutex<MethodArea>>,
+) -> Option<JvmObject> {
+	if let Ok(mut methodarea) = methodarea.lock() {
+		let string_class_name = format!("java/lang/String");
+		if let Some(string_class) = methodarea.get_class_rc(&string_class_name) {
+			let mut string_object = JvmObject::new(Rc::clone(&string_class), thread.debug_level());
+			println!(
+				"get_field: value: {}",
+				string_object.get_field(&"value".to_string()).unwrap()
+			);
+			return Some(string_object);
+		}
+	}
+
+	None
 }
 
 impl JvmObject {

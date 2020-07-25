@@ -8,11 +8,8 @@ public class Hello {
 	public static void nothing() {
 	}
 
-	public static int something(Class c) {
-		if (c == Hola.class)
-			return 2;
-		else
-			return 3;
+	public static int something() {
+		return 2;
 	}
 
 	public static int sum(int a, int b) {
@@ -36,11 +33,12 @@ public class Hello {
 			 */
 			Hola hola = new Hola();
 			Aloha aloha = hola;
-			b = mult(something(Hola.class), aloha.say());
+			b = mult(something(), aloha.say());
 		} else {
 			b = sum(1, 4);
 		}
 		nothing();
+		String str = new String("Hello, world.");
 		System.out.println("Hello, world");
 	}
 }

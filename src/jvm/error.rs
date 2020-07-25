@@ -99,3 +99,28 @@ impl FatalError {
 		assert!(false);
 	}
 }
+pub enum NonFatalErrorType {
+	NotImplemented(String),
+}
+
+impl fmt::Display for NonFatalErrorType {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			NonFatalErrorType::NotImplemented(what) => write!(f, "{} not implemented.", what),
+		}
+	}
+}
+
+pub struct NonFatalError {
+	error: NonFatalErrorType,
+}
+
+impl NonFatalError {
+	pub fn new(error: NonFatalErrorType) -> Self {
+		NonFatalError { error: error }
+	}
+
+	pub fn call(&self) {
+		eprintln!("Non Fatal Error: {}", self.error);
+	}
+}

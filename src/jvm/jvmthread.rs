@@ -36,6 +36,8 @@ use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
 use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
+use jvm::error::NonFatalError;
+use jvm::error::NonFatalErrorType;
 use jvm::frame::Frame;
 use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
@@ -84,7 +86,6 @@ pub fn move_parameters_to_locals(
 }
 
 impl JvmThread {
-
 	pub fn debug_level(&self) -> DebugLevel {
 		self.debug_level.clone()
 	}
@@ -318,6 +319,11 @@ impl JvmThread {
 				self.execute_aload_x(3, frame);
 				OpcodeResult::Incr(1)
 			}
+			Some(OperandCode::AaLoad) => {
+				Debug(format!("aaload"), &self.debug_level, DebugLevel::Info);
+				self.execute_aaload(frame);
+				OpcodeResult::Incr(1)
+			}
 			Some(OperandCode::CaLoad) => {
 				Debug(format!("caload"), &self.debug_level, DebugLevel::Info);
 				self.execute_caload(frame);
@@ -363,6 +369,12 @@ impl JvmThread {
 				self.execute_astore_x(3, frame);
 				OpcodeResult::Incr(1)
 			}
+			Some(OperandCode::AaStore) => {
+				Debug(format!("aastore"), &self.debug_level, DebugLevel::Info);
+				self.execute_aastore(frame);
+				OpcodeResult::Incr(1)
+			}
+
 			Some(OperandCode::CaStore) => {
 				Debug(format!("castore"), &self.debug_level, DebugLevel::Info);
 				self.execute_castore(frame);
@@ -420,6 +432,11 @@ impl JvmThread {
 					FatalError::new(FatalErrorType::NotImplemented(format!("0x{:x}", opcode)))
 						.call();
 				}
+				OpcodeResult::Incr(3)
+			}
+			Some(OperandCode::GetField) => {
+				Debug(format!("getfield"), &self.debug_level, DebugLevel::Info);
+				self.execute_getfield(((bytes[1] as u16) << 8) | (bytes[2] as u16) as u16, frame);
 				OpcodeResult::Incr(3)
 			}
 			Some(OperandCode::PutField) => {
@@ -528,6 +545,35 @@ impl JvmThread {
 					.call();
 				}
 				OpcodeResult::Incr(2)
+			}
+			Some(OperandCode::ANewArray) => {
+				let type_index = ((bytes[1] as u16) << 8) | (bytes[2] as u16);
+				if let Some(array_size) = frame.operand_stack.pop() {
+					if let JvmValue::Primitive(JvmPrimitiveType::Integer, count, _) = array_size {
+						let res = self.execute_anewarray(type_index, count, frame);
+						Debug(
+							format!("frame after new: {}", frame),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+						res
+					} else {
+						// Wrong type for the count
+						FatalError::new(FatalErrorType::WrongType(
+							format!("anewarray"),
+							format!("integer primitive"),
+						))
+						.call();
+						OpcodeResult::Incr(3)
+					}
+				} else {
+					// Missing a count on the stack!
+					FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+						"anewarray"
+					)))
+					.call();
+					OpcodeResult::Incr(3)
+				}
 			}
 			_ => {
 				FatalError::new(FatalErrorType::NotImplemented(format!("0x{:x}", opcode))).call();
@@ -820,6 +866,109 @@ impl JvmThread {
 			.call();
 		}
 	}
+	fn execute_aaload(&self, frame: &mut Frame) {
+		Debug(
+			format!("Frame before aaload: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+
+		// Pull the three things on the top of the stack.
+		let index = frame.operand_stack.pop();
+		let arrayref = frame.operand_stack.pop();
+
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, index, _)) = index {
+			if let Some(arrayref) = arrayref {
+				// I now have everything that I need!
+
+				// Check to make sure that the arrayref is to something of the right type.
+				if let JvmValue::Reference(
+					JvmReferenceType::Array(_ /* check me*/, _),
+					JvmReferenceTargetType::Array(array),
+					_,
+				) = arrayref
+				{
+					if let Ok(mut array) = array.lock() {
+						if let Some(value_from_array) = array.get_at(index as usize) {
+							frame.operand_stack.push(value_from_array.clone());
+						}
+					} else {
+						// The load is from a position outside the size of the array.
+						FatalError::new(FatalErrorType::Exception(format!("IndexOutOfBounds")))
+							.call();
+					}
+				} else {
+					FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+						"Primitive Integer index into an array."
+					)))
+					.call();
+				}
+			} else {
+				// Missing an index on the stack.
+				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+					"Index into an array."
+				)))
+				.call();
+			}
+		}
+	}
+
+	fn execute_aastore(&self, frame: &mut Frame) {
+		Debug(
+			format!("Frame before aastore: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+
+		// Pull the three things on the top of the stack.
+		let value = frame.operand_stack.pop();
+		let index = frame.operand_stack.pop();
+		let arrayref = frame.operand_stack.pop();
+
+		if let Some(value) = value {
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, index, _)) = index {
+				if let Some(arrayref) = arrayref {
+					// I now have everything that I need!
+
+					// Check to make sure that the arrayref is to something of the right type.
+					if let JvmValue::Reference(
+						JvmReferenceType::Array(_ /* check me*/, _),
+						JvmReferenceTargetType::Array(array),
+						_,
+					) = arrayref
+					{
+						if let Ok(mut array) = array.lock() {
+							array.set_at(index as usize, value);
+						} else {
+							FatalError::new(FatalErrorType::CouldNotLock(
+								format!("Array."),
+								format!("execute_aastore"),
+							))
+							.call();
+						}
+					}
+				} else {
+					FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+						"Primitive Integer index into an array."
+					)))
+					.call();
+				}
+			} else {
+				// Missing an index on the stack.
+				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+					"Index into an array."
+				)))
+				.call();
+			}
+		} else {
+			// Missing a value on the stack.
+			FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+				"Primitive"
+			)))
+			.call();
+		}
+	}
+
 	fn execute_castore(&self, frame: &mut Frame) {
 		/*
 		 * From the Java spec:
@@ -938,7 +1087,7 @@ impl JvmThread {
 			} else {
 				// Missing an index on the stack.
 				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
-					"Reference to an array."
+					"Index into an array."
 				)))
 				.call();
 			}
@@ -1004,6 +1153,11 @@ impl JvmThread {
 
 		match constant_pool.get_constant_ref(instantiated_class_index) {
 			Constant::String(_, string_index) => {
+				let string_object = create_static_string_object(
+					format!("Testing"),
+					self,
+					Arc::clone(&self.methodarea),
+				);
 				Debug(
 					format!("Frame after ldc: {}", frame),
 					&self.debug_level,
@@ -1013,6 +1167,7 @@ impl JvmThread {
 			}
 			_ => {}
 		}
+		FatalError::new(FatalErrorType::NotImplemented(format!("execute_ldc"))).call();
 	}
 
 	fn execute_iload_x(&mut self, x: usize, frame: &mut Frame) {
@@ -1411,6 +1566,83 @@ impl JvmThread {
 		return None;
 	}
 
+	fn execute_getfield(&mut self, index: u16, frame: &mut Frame) {
+		/*
+		 * 1.
+		 */
+		let class = frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
+		let field_index = index as usize;
+
+		let objectref = frame.operand_stack.pop();
+
+		if let Some(objectref) = objectref {
+			if let Constant::Fieldref(_, class_ref, name_and_type_ref) =
+				constant_pool.get_constant_ref(field_index)
+			{
+				// Let's get the name and the type of the field!
+
+				// Let's get the class name
+				let mut field_class_name = None;
+				let mut field_name = None;
+				let mut field_type = None;
+
+				if let Constant::Class(_, class_name_index) =
+					constant_pool.get_constant_ref(*class_ref as usize)
+				{
+					if let Constant::Utf8(_, _, _, class_name) =
+						constant_pool.get_constant_ref(*class_name_index as usize)
+					{
+						// class_name is the name of the class where the field exists.
+						field_class_name = Some(class_name);
+					}
+				}
+
+				if let Constant::NameAndType(_, field_name_index, field_type_index) =
+					constant_pool.get_constant_ref(*name_and_type_ref as usize)
+				{
+					if let Constant::Utf8(_, _, _, field_name_constant) =
+						constant_pool.get_constant_ref(*field_name_index as usize)
+					{
+						field_name = Some(field_name_constant);
+					}
+					if let Constant::Utf8(_, _, _, field_type_constant) =
+						constant_pool.get_constant_ref(*field_type_index as usize)
+					{
+						field_type = Some(field_type_constant);
+					}
+				}
+
+				println!("field_class_name: {}", field_class_name.unwrap());
+				println!("field_name: {}", field_name.unwrap());
+				println!("field_type: {}", field_type.unwrap());
+
+				if let JvmValue::Reference(
+					JvmReferenceType::Class(objectref_class_name),
+					JvmReferenceTargetType::Object(objectref_object),
+					_,
+				) = objectref
+				{
+					println!("objectref_class_name: {}", objectref_class_name);
+					if let Ok(mut objectref_object) = objectref_object.lock() {
+						if let Ok(mut methodarea) = self.methodarea.lock() {
+							if objectref_object
+								.get_class()
+								.is_type_of(field_class_name.unwrap(), &mut *methodarea)
+							{
+								if let Some(field_value) = objectref_object.get_field(field_name.unwrap()) {
+									frame.operand_stack.push((*field_value).clone())
+								}
+							}
+						}
+					}
+				} else {
+					// Object ref ahs to be a classref.
+				}
+			}
+		}
+	}
+
 	fn execute_putfield(&mut self, index: u16, frame: &mut Frame) {
 		/*
 		 * 1.
@@ -1471,13 +1703,13 @@ impl JvmThread {
 					) = objectref
 					{
 						println!("objectref_class_name: {}", objectref_class_name);
-						if let Ok(objectref_object) = objectref_object.lock() {
+						if let Ok(mut objectref_object) = objectref_object.lock() {
 							if let Ok(mut methodarea) = self.methodarea.lock() {
 								if objectref_object
 									.get_class()
 									.is_type_of(field_class_name.unwrap(), &mut *methodarea)
 								{
-									println!("Success?");
+									objectref_object.set_field(field_name.unwrap(), Rc::new(value))
 								}
 							}
 						}
@@ -1487,8 +1719,6 @@ impl JvmThread {
 				}
 			}
 		}
-
-		FatalError::new(FatalErrorType::NotImplemented(format!("execute_putfield"))).call();
 	}
 
 	fn execute_invokevirtual(
@@ -1629,8 +1859,10 @@ impl JvmThread {
 					}
 				} else {
 					// We do not know how to execute native methods.
-					FatalError::new(FatalErrorType::NotImplemented("Native methods".to_string()))
-						.call();
+					NonFatalError::new(NonFatalErrorType::NotImplemented(
+						"Native methods".to_string(),
+					))
+					.call();
 				}
 			}
 			/*
@@ -1868,5 +2100,77 @@ impl JvmThread {
 			}
 		}
 		None
+	}
+	fn execute_anewarray(
+		&mut self,
+		type_index: u16,
+		count: u64,
+		frame: &mut Frame,
+	) -> OpcodeResult {
+		let class = frame.class().unwrap();
+		let constant_pool = class.get_constant_pool_ref();
+		let newarray_type = constant_pool.get_constant_ref(type_index as usize);
+
+		if let Constant::Class(_, newarray_class_name_index) = newarray_type {
+			let newarray_class_name_constant =
+				constant_pool.get_constant_ref(*newarray_class_name_index as usize);
+			if let Constant::Utf8(_, _, _, new_array_class_name) = newarray_class_name_constant {
+				// Resolve the class.
+				// TODO: This could throw an exception!
+				let mut new_array_class = if let Ok(mut methodarea) = self.methodarea.lock() {
+					(*methodarea).maybe_load_class(&new_array_class_name);
+					(*methodarea).get_class_rc(&new_array_class_name)
+				} else {
+					FatalError::new(FatalErrorType::CouldNotLock(
+						format!("Class."),
+						format!("execute_anewarray"),
+					))
+					.call();
+					None
+				};
+				if let Some(new_array_class) = new_array_class {
+					// Make the array
+					let mut array = JvmArray::new(count as usize);
+					for i in 0..count {
+						array.push(create_null_value());
+					}
+
+					let jvmtype = JvmType::Reference(JvmReferenceType::Array(
+						Rc::new(JvmType::Reference(JvmReferenceType::Class(
+							new_array_class_name.clone(),
+						))),
+						count as u64,
+					));
+					let v = JvmValue::Reference(
+						JvmReferenceType::Array(Rc::new(jvmtype), count as u64), // type
+						JvmReferenceTargetType::Array(Arc::new(Mutex::new(array))), //target type
+						0,                                                       // access,
+					);
+					frame.operand_stack.push(v);
+				} else {
+					FatalError::new(FatalErrorType::ClassNotFound(new_array_class_name.clone()))
+						.call()
+				}
+			} else {
+				FatalError::new(FatalErrorType::WrongType(
+					format!("anewarray"),
+					format!("symbolic reference to class."),
+				))
+				.call();
+			}
+		} else if let Constant::InterfaceMethodref(_, _, _) = newarray_type {
+			FatalError::new(FatalErrorType::NotImplemented(format!(
+				"execute_anewarray of interface/method references."
+			)))
+			.call();
+		} else {
+			// We need to also handle an array. See the description of this type. And then, say that there is an error for the wrong type.
+			FatalError::new(FatalErrorType::WrongType(
+				format!("anewarray"),
+				format!("reference to class, interface/method or array."),
+			))
+			.call();
+		}
+		OpcodeResult::Incr(3)
 	}
 }

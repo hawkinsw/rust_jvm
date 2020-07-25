@@ -12,7 +12,7 @@ public class Exceptional {
             //unExceptionalMethod();
             result = 1;
         } catch (Exception e) {
-            System.out.println("This is exceptional!");
+            //System.out.println("This is exceptional!");
             result = -1;
         }
     }
