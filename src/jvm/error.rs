@@ -23,6 +23,7 @@ pub enum FatalErrorType {
 	NotImplemented(String),
 	RequiredStackValueNotFound(String),
 	Exception(String),
+	Todo(String),
 }
 
 impl fmt::Display for FatalErrorType {
@@ -80,6 +81,7 @@ impl fmt::Display for FatalErrorType {
 				write!(f, "{} needs a stack value that was not found.", requirement)
 			}
 			FatalErrorType::Exception(exception_type) => write!(f, "Exception: {}", exception_type),
+			FatalErrorType::Todo(task) => write!(f, "TODO: {}", task),
 			_ => write!(f, "Unhandled FatalErrorType."),
 		}
 	}

@@ -299,6 +299,26 @@ impl JvmThread {
 				self.execute_iload_x(3, frame);
 				OpcodeResult::Incr(1)
 			}
+			Some(OperandCode::Fload_0) => {
+				Debug(format!("fload_0"), &self.debug_level, DebugLevel::Info);
+				self.execute_fload_x(0, frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fload_1) => {
+				Debug(format!("fload_1"), &self.debug_level, DebugLevel::Info);
+				self.execute_fload_x(1, frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fload_2) => {
+				Debug(format!("fload_2"), &self.debug_level, DebugLevel::Info);
+				self.execute_fload_x(2, frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fload_3) => {
+				Debug(format!("fload_3"), &self.debug_level, DebugLevel::Info);
+				self.execute_fload_x(3, frame);
+				OpcodeResult::Incr(1)
+			}
 			Some(OperandCode::Aload_0) => {
 				Debug(format!("aload_0"), &self.debug_level, DebugLevel::Info);
 				self.execute_aload_x(0, frame);
@@ -347,6 +367,26 @@ impl JvmThread {
 			Some(OperandCode::Istore_3) => {
 				Debug(format!("istore_3"), &self.debug_level, DebugLevel::Info);
 				self.execute_istore_x(3, frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fstore_0) => {
+				Debug(format!("fstore_0"), &self.debug_level, DebugLevel::Info);
+				self.execute_fstore_x(0, frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fstore_1) => {
+				Debug(format!("fstore_1"), &self.debug_level, DebugLevel::Info);
+				self.execute_fstore_x(1, frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fstore_2) => {
+				Debug(format!("fstore_2"), &self.debug_level, DebugLevel::Info);
+				self.execute_fstore_x(2, frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fstore_3) => {
+				Debug(format!("fstore_3"), &self.debug_level, DebugLevel::Info);
+				self.execute_fstore_x(3, frame);
 				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Astore_0) => {
@@ -400,6 +440,11 @@ impl JvmThread {
 			Some(OperandCode::Iadd) => {
 				Debug(format!("iadd"), &self.debug_level, DebugLevel::Info);
 				self.execute_iadd(frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fadd) => {
+				Debug(format!("fadd"), &self.debug_level, DebugLevel::Info);
+				self.execute_fadd(frame);
 				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Imul) => {
@@ -625,6 +670,25 @@ impl JvmThread {
 			return step;
 		}
 		return 0;
+	}
+	fn execute_fadd(&mut self, frame: &mut Frame) {
+		Debug(
+			format!("fadd frame: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, op1, _)) =
+			frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, op2, _)) =
+				frame.operand_stack.pop()
+			{
+				FatalError::new(FatalErrorType::NotImplemented(format!(
+					"execute_fadd (string)"
+				)))
+				.call();
+			}
+		}
 	}
 
 	fn execute_iadd(&mut self, frame: &mut Frame) {
@@ -1111,17 +1175,25 @@ impl JvmThread {
 				if let JvmValue::Reference(rt, reference, access) = top {
 					frame.locals[x] = JvmValue::Reference(rt, reference, access);
 				} else {
-					assert!(false, "Wrong type.");
+					FatalError::new(FatalErrorType::WrongType(
+						format!("astore"),
+						format!("reference"),
+					))
+					.call();
 				}
 			} else {
-				assert!(false, "Not enough on the top of the stack.");
+				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+					"astore"
+				)))
+				.call();
 			}
 		} else {
-			assert!(
-				false,
-				"Not enough locals available: {}.",
-				frame.locals.len()
-			);
+			FatalError::new(FatalErrorType::NotEnough(
+				format!("astore"),
+				x,
+				format!("locals"),
+			))
+			.call();
 		}
 	}
 
@@ -1158,22 +1230,73 @@ impl JvmThread {
 					self,
 					Arc::clone(&self.methodarea),
 				);
-				Debug(
-					format!("Frame after ldc: {}", frame),
-					&self.debug_level,
-					DebugLevel::Info,
-				);
-				//frame.operand_stack.push(frame.locals[x].clone());
+				FatalError::new(FatalErrorType::NotImplemented(format!(
+					"execute_ldc (string)"
+				)))
+				.call();
 			}
-			_ => {}
+			Constant::Integer(_, value) => {
+				let constant_int = JvmValue::Primitive(JvmPrimitiveType::Integer, *value as u64, 0);
+				frame.operand_stack.push(constant_int);
+			}
+			Constant::Float(_, value) => {
+				let constant_float = JvmValue::Primitive(JvmPrimitiveType::Float, *value as u64, 0);
+				frame.operand_stack.push(constant_float);
+			}
+			_ => {
+				FatalError::new(FatalErrorType::NotImplemented(format!(
+					"execute_ldc (class, method type or method handle.)"
+				)))
+				.call();
+			}
 		}
-		FatalError::new(FatalErrorType::NotImplemented(format!("execute_ldc"))).call();
+		Debug(
+			format!("Frame after ldc: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+	}
+
+	fn execute_fload_x(&mut self, x: usize, frame: &mut Frame) {
+		frame.operand_stack.push(frame.locals[x].clone());
 	}
 
 	fn execute_iload_x(&mut self, x: usize, frame: &mut Frame) {
 		frame.operand_stack.push(frame.locals[x].clone());
 	}
 
+	fn execute_fstore_x(&self, x: usize, frame: &mut Frame) {
+		Debug(
+			format!("Frame before fstore_x: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+		if x < frame.locals.len() {
+			if let Some(top) = frame.operand_stack.pop() {
+				if let JvmValue::Primitive(JvmPrimitiveType::Float, value, access) = top {
+					frame.locals[x] = JvmValue::Primitive(JvmPrimitiveType::Float, value, access);
+				} else {
+					FatalError::new(FatalErrorType::WrongType(
+						format!("fstore"),
+						format!("float primitive"),
+					))
+					.call();
+				}
+			} else {
+				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+					"fstore"
+				)))
+				.call();
+			}
+		} else {
+			FatalError::new(FatalErrorType::NotEnough(
+				format!("fstore"),
+				x,
+				format!("locals"),
+			))
+			.call();
+		}
+	}
 	fn execute_istore_x(&self, x: usize, frame: &mut Frame) {
 		Debug(
 			format!("Frame before istore_x: {}", frame),
@@ -1185,17 +1308,25 @@ impl JvmThread {
 				if let JvmValue::Primitive(pt, value, access) = top {
 					frame.locals[x] = JvmValue::Primitive(pt, value, access);
 				} else {
-					assert!(false, "Wrong type.");
+					FatalError::new(FatalErrorType::WrongType(
+						format!("istore"),
+						format!("integer primitive"),
+					))
+					.call();
 				}
 			} else {
-				assert!(false, "Not enough on the top of the stack.");
+				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+					"istore"
+				)))
+				.call();
 			}
 		} else {
-			assert!(
-				false,
-				"Not enough locals available: {}.",
-				frame.locals.len()
-			);
+			FatalError::new(FatalErrorType::NotEnough(
+				format!("fstore"),
+				x,
+				format!("locals"),
+			))
+			.call();
 		}
 	}
 
@@ -1630,7 +1761,9 @@ impl JvmThread {
 								.get_class()
 								.is_type_of(field_class_name.unwrap(), &mut *methodarea)
 							{
-								if let Some(field_value) = objectref_object.get_field(field_name.unwrap()) {
+								if let Some(field_value) =
+									objectref_object.get_field(field_name.unwrap())
+								{
 									frame.operand_stack.push((*field_value).clone())
 								}
 							}
@@ -1851,7 +1984,6 @@ impl JvmThread {
 							} else {
 								FatalError::new(FatalErrorType::MethodExecutionFailed(method_name))
 									.call();
-								assert!(false);
 							}
 						}
 					} else {
@@ -1907,7 +2039,7 @@ impl JvmThread {
 
 			if let (Some(invoked_class), Some(resolved_method)) = (invoked_class, resolved_method) {
 				if ((MethodAccessFlags::Protected as u16) & resolved_method.access_flags) != 0 {
-					assert!(false, "TODO: Finally, if the resolved method is protected (§4.6), and it is a member of a superclass of the current class, and the method is not declared in the same run-time package (§5.3) as the current class, then the class of objectref must be either the current class or a subclass of the current class.");
+					FatalError::new(FatalErrorType::Todo(format!("Finally, if the resolved method is protected (§4.6), and it is a member of a superclass of the current class, and the method is not declared in the same run-time package (§5.3) as the current class, then the class of objectref must be either the current class or a subclass of the current class."))).call();
 				}
 				/* TODO:
 					Next, the resolved method is selected for invocation unless all of the following conditions are true:
@@ -1934,7 +2066,7 @@ impl JvmThread {
 
 						Otherwise, an AbstractMethodError is raised.
 					*/
-					assert!(false);
+					FatalError::new(FatalErrorType::Todo(format!(""))).call();
 				} else if resolved_method.access_flags & (MethodAccessFlags::Native as u16) == 0 {
 					let mut invoked_frame = Frame::new();
 					invoked_frame.class = Some(Rc::clone(&invoked_class));
