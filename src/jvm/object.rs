@@ -147,10 +147,13 @@ impl JvmObject {
 			 * Get the default field value.
 			 */
 			let value = match r#type {
-				JvmType::Primitive(primitive) => JvmValue::Primitive(primitive, 0, access_flags),
+				JvmType::Primitive(primitive) => JvmValue::Primitive(primitive, 0, 0, access_flags),
 				JvmType::Reference(reference) => {
-					assert!(false, "TODO: Handle fields that are reference types.");
-					JvmValue::Primitive(JvmPrimitiveType::Void, 0, access_flags)
+					FatalError::new(FatalErrorType::Todo(format!(
+						"TODO: Handle fields that are reference types."
+					)))
+					.call();
+					JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0, access_flags)
 				}
 			};
 

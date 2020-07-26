@@ -24,6 +24,7 @@ mod array;
 mod attribute;
 mod class;
 mod classpath;
+mod comparison;
 mod constant;
 mod constantpool;
 pub mod debug;

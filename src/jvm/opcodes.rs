@@ -30,6 +30,7 @@ enum_from_primitive! {
 		Iconst_3 = 0x6,
 		Iconst_4 = 0x7,
 		Iconst_5 = 0x8,
+		Fconst_0 = 0xB,
 		Bipush = 0x10,
 		Ldc = 0x12,
 		Iload_0 = 0x1a,
@@ -83,5 +84,13 @@ enum_from_primitive! {
 		New = 0xbb,
 		NewArray = 0xbc,
 		ANewArray = 0xbd,
+		Fcmplt = 0x95,
+		Fcmpgt = 0x96,
+		Ifeq = 0x99,
+		Ifne = 0x9a,
+		Iflt = 0x9b,
+		Ifge = 0x9c,
+		Ifgt = 0x9d,
+		Ifle = 0x9e,
 	}
 }

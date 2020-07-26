@@ -30,8 +30,8 @@ use jvm::array::JvmArrayType;
 use jvm::class::Class;
 use jvm::class::ClassAccessFlags;
 use jvm::class::ClassInitializationStatus;
+use jvm::comparison::ComparisonType;
 use jvm::constant::Constant;
-use jvm::constantpool::ConstantPool;
 use jvm::debug::Debug;
 use jvm::debug::DebugLevel;
 use jvm::error::FatalError;
@@ -41,7 +41,6 @@ use jvm::error::NonFatalErrorType;
 use jvm::frame::Frame;
 use jvm::method::Method;
 use jvm::method::MethodAccessFlags;
-use jvm::methodarea::LoadedClass;
 use jvm::methodarea::MethodArea;
 use jvm::object::{create_static_string_object, JvmObject};
 use jvm::opcodes::OperandCode;
@@ -53,9 +52,7 @@ use jvm::typevalues::JvmType;
 use jvm::typevalues::JvmValue;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::LockResult;
 use std::sync::Mutex;
-use std::sync::MutexGuard;
 
 pub struct JvmThread {
 	debug_level: DebugLevel,
@@ -67,6 +64,7 @@ pub struct JvmThread {
 enum OpcodeResult {
 	Exception,
 	Incr(usize),
+	Decr(usize),
 	Value(JvmValue),
 }
 
@@ -143,7 +141,7 @@ impl JvmThread {
 				 */
 				frame
 					.operand_stack
-					.push(JvmValue::Primitive(JvmPrimitiveType::Boolean, 0, 0));
+					.push(JvmValue::Primitive(JvmPrimitiveType::Boolean, 0, 0, 0));
 
 				Debug(
 					format!("Frame: {}", frame),
@@ -152,7 +150,7 @@ impl JvmThread {
 				);
 
 				if let Some(v) = self.execute_method(&main_method, frame) {
-					if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0) != v {
+					if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0, 0) != v {
 						FatalError::new(FatalErrorType::VoidMethodReturnedValue).call();
 					}
 				}
@@ -189,20 +187,22 @@ impl JvmThread {
 
 		frame.locals.resize(
 			method.max_locals,
-			JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0),
+			JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0, 0),
 		);
 
 		if let Some(code) = method.get_code(class.get_constant_pool_ref()) {
 			let mut pc = 0;
 			while {
-				let mut pc_incr = 0;
+				let mut pc_pos_delta = 0usize;
+				let mut pc_neg_delta = 0usize;
 				Debug(
 					format!("Doing next opcode\n"),
 					&self.debug_level,
 					DebugLevel::Info,
 				);
 				match self.execute_opcode(&code[pc..], &mut frame) {
-					OpcodeResult::Incr(incr) => pc_incr = incr,
+					OpcodeResult::Incr(incr) => pc_pos_delta = incr,
+					OpcodeResult::Decr(decr) => pc_neg_delta = decr,
 					OpcodeResult::Value(v) => return Some(v),
 					OpcodeResult::Exception => {
 						/*
@@ -212,8 +212,20 @@ impl JvmThread {
 							.call();
 					}
 				};
-				pc += pc_incr;
-				pc_incr != 0
+				Debug(
+					format!("pc_pos_delta: {}\n", pc_pos_delta),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				Debug(
+					format!("pc_neg: {}\n", pc_neg_delta),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				pc += pc_pos_delta;
+				pc -= pc_neg_delta;
+				Debug(format!("pc: {}\n", pc), &self.debug_level, DebugLevel::Info);
+				pc_pos_delta != 0 || pc_neg_delta != 0
 			} {}
 		}
 		None
@@ -265,11 +277,19 @@ impl JvmThread {
 				self.execute_iconst_x(5, frame);
 				OpcodeResult::Incr(1)
 			}
+			Some(OperandCode::Fconst_0) => {
+				Debug(format!("fconst_0"), &self.debug_level, DebugLevel::Info);
+				frame
+					.operand_stack
+					.push(JvmValue::Primitive(JvmPrimitiveType::Float, 0, 0, 0));
+				OpcodeResult::Incr(1)
+			}
 			Some(OperandCode::Bipush) => {
 				Debug(format!("bipush"), &self.debug_level, DebugLevel::Info);
 				frame.operand_stack.push(JvmValue::Primitive(
 					JvmPrimitiveType::Integer,
-					bytes[1] as u64,
+					0,
+					bytes[1] as u32,
 					0,
 				));
 				OpcodeResult::Incr(2)
@@ -468,7 +488,7 @@ impl JvmThread {
 			}
 			Some(OperandCode::r#Return) => {
 				Debug(format!("return"), &self.debug_level, DebugLevel::Info);
-				OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0))
+				OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0, 0))
 			}
 			Some(OperandCode::GetStatic) => {
 				Debug(format!("getstatic"), &self.debug_level, DebugLevel::Info);
@@ -550,7 +570,7 @@ impl JvmThread {
 				// First, make sure that there is a reasonable array size on the stack.
 				if let Some(newarray_len) = newarray_len {
 					match newarray_len {
-						JvmValue::Primitive(JvmPrimitiveType::Integer, len, _) => {
+						JvmValue::Primitive(JvmPrimitiveType::Integer, _, len, _) => {
 							match JvmArrayType::from_u8(newarray_type) {
 								Some(JvmArrayType::Char) /* Character */ => {
 									frame.operand_stack.push(
@@ -592,9 +612,11 @@ impl JvmThread {
 				OpcodeResult::Incr(2)
 			}
 			Some(OperandCode::ANewArray) => {
+				Debug(format!("ANewArray"), &self.debug_level, DebugLevel::Info);
 				let type_index = ((bytes[1] as u16) << 8) | (bytes[2] as u16);
 				if let Some(array_size) = frame.operand_stack.pop() {
-					if let JvmValue::Primitive(JvmPrimitiveType::Integer, count, _) = array_size {
+					if let JvmValue::Primitive(JvmPrimitiveType::Integer, _, count, _) = array_size
+					{
 						let res = self.execute_anewarray(type_index, count, frame);
 						Debug(
 							format!("frame after new: {}", frame),
@@ -620,6 +642,47 @@ impl JvmThread {
 					OpcodeResult::Incr(3)
 				}
 			}
+			Some(OperandCode::Fcmpgt) | Some(OperandCode::Fcmplt) => {
+				Debug(
+					format!("Fcmpgt or Fcmplt"),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				self.execute_fcmp(frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Ifeq) => {
+				Debug(format!("Ifeq"), &self.debug_level, DebugLevel::Info);
+				self.execute_if(ComparisonType::Equal, &[bytes[1], bytes[2]], frame)
+			}
+			Some(OperandCode::Ifne) => {
+				Debug(format!("Ifne"), &self.debug_level, DebugLevel::Info);
+				self.execute_if(ComparisonType::NotEqual, &[bytes[1], bytes[2]], frame)
+			}
+			Some(OperandCode::Iflt) => {
+				Debug(format!("Iflt"), &self.debug_level, DebugLevel::Info);
+				self.execute_if(ComparisonType::LessThan, &[bytes[1], bytes[2]], frame)
+			}
+			Some(OperandCode::Ifge) => {
+				Debug(format!("Ifge"), &self.debug_level, DebugLevel::Info);
+				self.execute_if(
+					ComparisonType::GreaterThanOrEqual,
+					&[bytes[1], bytes[2]],
+					frame,
+				)
+			}
+			Some(OperandCode::Ifgt) => {
+				Debug(format!("Ifgt"), &self.debug_level, DebugLevel::Info);
+				self.execute_if(ComparisonType::GreaterThan, &[bytes[1], bytes[2]], frame)
+			}
+			Some(OperandCode::Ifle) => {
+				Debug(format!("Ifle"), &self.debug_level, DebugLevel::Info);
+				self.execute_if(
+					ComparisonType::LessThanOrEqual,
+					&[bytes[1], bytes[2]],
+					frame,
+				)
+			}
 			_ => {
 				FatalError::new(FatalErrorType::NotImplemented(format!("0x{:x}", opcode))).call();
 				OpcodeResult::Incr(0)
@@ -644,7 +707,7 @@ impl JvmThread {
 				 * The JvmTypeValue::Primitive with tipe == JvmPrimitiveType::Void
 				 * is a sentinel value that indicates a return from a Void function.
 				 */
-				JvmValue::Primitive(t, _, _) => {
+				JvmValue::Primitive(t, _, _, _) => {
 					if t == JvmPrimitiveType::Void {
 						Debug(
 							format!("Not pushing a void onto the caller's stack."),
@@ -671,24 +734,134 @@ impl JvmThread {
 		}
 		return 0;
 	}
-	fn execute_fadd(&mut self, frame: &mut Frame) {
+	fn execute_if(
+		&mut self,
+		comparison: ComparisonType,
+		branch_bytes: &[u8; 2],
+		frame: &mut Frame,
+	) -> OpcodeResult {
+		let branch_offset = i16::from_be_bytes(branch_bytes.clone());
 		Debug(
-			format!("fadd frame: {}", frame),
+			format!("if frame: {}", frame),
 			&self.debug_level,
 			DebugLevel::Info,
 		);
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, op1, _)) =
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, value, _)) =
 			frame.operand_stack.pop()
 		{
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, op2, _)) =
+			let ivalue = i32::from_le_bytes(value.to_le_bytes());
+			let mut take_branch = false;
+			match comparison {
+				ComparisonType::Equal => {
+					if ivalue == 0 {
+						take_branch = true;
+					}
+				}
+				ComparisonType::NotEqual => {
+					if ivalue != 0 {
+						take_branch = true;
+					}
+				}
+				ComparisonType::LessThan => {
+					if ivalue < 0 {
+						take_branch = true;
+					}
+				}
+				ComparisonType::LessThanOrEqual => {
+					if ivalue <= 0 {
+						take_branch = true;
+					}
+				}
+				ComparisonType::GreaterThan => {
+					if ivalue > 0 {
+						take_branch = true;
+					}
+				}
+				ComparisonType::GreaterThanOrEqual => {
+					if ivalue >= 0 {
+						take_branch = true;
+					}
+				}
+			};
+			if take_branch {
+				if branch_offset < 0 {
+					OpcodeResult::Decr(branch_offset.abs() as usize)
+				} else {
+					OpcodeResult::Incr(branch_offset.abs() as usize)
+				}
+			} else {
+				// Not taking the branch, so we just start at the next instruction after this one!
+				OpcodeResult::Incr(3)
+			}
+		} else {
+			FatalError::new(FatalErrorType::WrongType(format!("1"), format!("2"))).call();
+			OpcodeResult::Value(JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0, 0))
+		}
+	}
+
+	fn execute_fadd(&mut self, frame: &mut Frame) {
+		Debug(
+			format!("fadd frame (pre): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op1, _)) =
+			frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op2, _)) =
 				frame.operand_stack.pop()
 			{
-				FatalError::new(FatalErrorType::NotImplemented(format!(
-					"execute_fadd (string)"
-				)))
-				.call();
+				let fop1 = f32::from_le_bytes(op1.to_le_bytes());
+				let fop2 = f32::from_le_bytes(op2.to_le_bytes());
+				let res = fop1 + fop2;
+				let res_value = u32::from_le_bytes(res.to_le_bytes());
+
+				frame.operand_stack.push(JvmValue::Primitive(
+					JvmPrimitiveType::Float,
+					0,
+					res_value,
+					0,
+				));
 			}
 		}
+		Debug(
+			format!("fadd frame (post): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+	}
+
+	fn execute_fcmp(&mut self, frame: &mut Frame) {
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, val2, _)) =
+			frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, val1, _)) =
+				frame.operand_stack.pop()
+			{
+				let fval1 = f32::from_le_bytes(val1.to_le_bytes());
+				let fval2 = f32::from_le_bytes(val2.to_le_bytes());
+				let mut res = 0i32;
+				if fval1 > fval2 {
+					res = 1i32;
+				} else if fval1 == fval2 {
+					res = 0i32;
+				} else if fval1 < fval2 {
+					res = -1i32;
+				}
+
+				frame.operand_stack.push(JvmValue::Primitive(
+					JvmPrimitiveType::Integer,
+					0,
+					u32::from_le_bytes(res.to_le_bytes()),
+					0,
+				));
+			}
+		}
+		Debug(
+			format!("fcmp frame (post): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
 	}
 
 	fn execute_iadd(&mut self, frame: &mut Frame) {
@@ -697,14 +870,16 @@ impl JvmThread {
 			&self.debug_level,
 			DebugLevel::Info,
 		);
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op1, _)) =
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, op1, _)) =
 			frame.operand_stack.pop()
 		{
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op2, _)) =
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, op2, _)) =
 				frame.operand_stack.pop()
 			{
+				FatalError::new(FatalErrorType::Todo(format!("This needs to account for the fact that we are storing ints in us. Look at fadd for an example."))).call();
 				frame.operand_stack.push(JvmValue::Primitive(
 					JvmPrimitiveType::Integer,
+					0,
 					op1 + op2,
 					0,
 				));
@@ -712,14 +887,15 @@ impl JvmThread {
 		}
 	}
 	fn execute_imul(&mut self, frame: &mut Frame) {
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op1, _)) =
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, op1, _)) =
 			frame.operand_stack.pop()
 		{
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, op2, _)) =
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, op2, _)) =
 				frame.operand_stack.pop()
 			{
 				frame.operand_stack.push(JvmValue::Primitive(
 					JvmPrimitiveType::Integer,
+					0,
 					op1 * op2,
 					0,
 				));
@@ -736,10 +912,10 @@ impl JvmThread {
 		let mut pc_incr: usize = 3;
 		let success_incr: usize = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 		let fail_incr: usize = 3 as usize;
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, value2, _)) =
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, value2, _)) =
 			frame.operand_stack.pop()
 		{
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, value1, _)) =
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, value1, _)) =
 				frame.operand_stack.pop()
 			{
 				pc_incr = match operation {
@@ -828,7 +1004,8 @@ impl JvmThread {
 					) => {
 						if let JvmType::Primitive(JvmPrimitiveType::Char) = **arrayreftype {
 							// The index must be a Primitive Integer.
-							if let JvmValue::Primitive(JvmPrimitiveType::Integer, index, _) = index
+							if let JvmValue::Primitive(JvmPrimitiveType::Integer, _, index, _) =
+								index
 							{
 								// We need a lock even though we are just reading.
 								if let Ok(mut exclusive_array) = array.lock() {
@@ -839,12 +1016,14 @@ impl JvmThread {
 											if let JvmValue::Primitive(
 												JvmPrimitiveType::Char,
 												char,
+												_,
 												char_access,
 											) = *value
 											{
 												let integer = JvmValue::Primitive(
 													JvmPrimitiveType::Integer,
 													char as u64,
+													0,
 													char_access,
 												);
 												frame.operand_stack.push(integer);
@@ -941,7 +1120,7 @@ impl JvmThread {
 		let index = frame.operand_stack.pop();
 		let arrayref = frame.operand_stack.pop();
 
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, index, _)) = index {
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, index, _)) = index {
 			if let Some(arrayref) = arrayref {
 				// I now have everything that I need!
 
@@ -990,7 +1169,7 @@ impl JvmThread {
 		let arrayref = frame.operand_stack.pop();
 
 		if let Some(value) = value {
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, index, _)) = index {
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, index, _)) = index {
 				if let Some(arrayref) = arrayref {
 					// I now have everything that I need!
 
@@ -1063,11 +1242,13 @@ impl JvmThread {
 						// Check (2) second ...
 						if let JvmType::Primitive(JvmPrimitiveType::Char) = **arrayreftype {
 							// The index must be a primitive Integer.
-							if let JvmValue::Primitive(JvmPrimitiveType::Integer, index, _) = index
+							if let JvmValue::Primitive(JvmPrimitiveType::Integer, _, index, _) =
+								index
 							{
 								// Finally, the value must be a primitive Integer.
 								if let JvmValue::Primitive(
 									JvmPrimitiveType::Integer,
+									_,
 									value,
 									_len_access,
 								) = value
@@ -1078,6 +1259,7 @@ impl JvmThread {
 									let value_as_character = JvmValue::Primitive(
 										JvmPrimitiveType::Char,
 										value as u64,
+										0,
 										0,
 									);
 
@@ -1236,11 +1418,11 @@ impl JvmThread {
 				.call();
 			}
 			Constant::Integer(_, value) => {
-				let constant_int = JvmValue::Primitive(JvmPrimitiveType::Integer, *value as u64, 0);
+				let constant_int = JvmValue::Primitive(JvmPrimitiveType::Integer, 0, *value, 0);
 				frame.operand_stack.push(constant_int);
 			}
 			Constant::Float(_, value) => {
-				let constant_float = JvmValue::Primitive(JvmPrimitiveType::Float, *value as u64, 0);
+				let constant_float = JvmValue::Primitive(JvmPrimitiveType::Float, 0, *value, 0);
 				frame.operand_stack.push(constant_float);
 			}
 			_ => {
@@ -1273,8 +1455,9 @@ impl JvmThread {
 		);
 		if x < frame.locals.len() {
 			if let Some(top) = frame.operand_stack.pop() {
-				if let JvmValue::Primitive(JvmPrimitiveType::Float, value, access) = top {
-					frame.locals[x] = JvmValue::Primitive(JvmPrimitiveType::Float, value, access);
+				if let JvmValue::Primitive(JvmPrimitiveType::Float, _, value, access) = top {
+					frame.locals[x] =
+						JvmValue::Primitive(JvmPrimitiveType::Float, 0, value, access);
 				} else {
 					FatalError::new(FatalErrorType::WrongType(
 						format!("fstore"),
@@ -1305,8 +1488,8 @@ impl JvmThread {
 		);
 		if x < frame.locals.len() {
 			if let Some(top) = frame.operand_stack.pop() {
-				if let JvmValue::Primitive(pt, value, access) = top {
-					frame.locals[x] = JvmValue::Primitive(pt, value, access);
+				if let JvmValue::Primitive(pt, value64, value32, access) = top {
+					frame.locals[x] = JvmValue::Primitive(pt, value64, value32, access);
 				} else {
 					FatalError::new(FatalErrorType::WrongType(
 						format!("istore"),
@@ -1331,9 +1514,12 @@ impl JvmThread {
 	}
 
 	fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
-		frame
-			.operand_stack
-			.push(JvmValue::Primitive(JvmPrimitiveType::Integer, x as u64, 0));
+		frame.operand_stack.push(JvmValue::Primitive(
+			JvmPrimitiveType::Integer,
+			x as u64,
+			0,
+			0,
+		));
 	}
 
 	pub fn maybe_initialize_class(&mut self, class: &Rc<Class>) {
@@ -1519,7 +1705,7 @@ impl JvmThread {
 			);
 
 			if let Some(v) = self.execute_method(&clinit_method, clinit_frame) {
-				if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0) != v {
+				if JvmValue::Primitive(JvmPrimitiveType::Void, 0, 0, 0) != v {
 					FatalError::new(FatalErrorType::ClassInitMethodReturnedValue).call();
 				}
 			}
@@ -2236,7 +2422,7 @@ impl JvmThread {
 	fn execute_anewarray(
 		&mut self,
 		type_index: u16,
-		count: u64,
+		count: u32,
 		frame: &mut Frame,
 	) -> OpcodeResult {
 		let class = frame.class().unwrap();
@@ -2271,12 +2457,12 @@ impl JvmThread {
 						Rc::new(JvmType::Reference(JvmReferenceType::Class(
 							new_array_class_name.clone(),
 						))),
-						count as u64,
+						count,
 					));
 					let v = JvmValue::Reference(
-						JvmReferenceType::Array(Rc::new(jvmtype), count as u64), // type
+						JvmReferenceType::Array(Rc::new(jvmtype), count), // type
 						JvmReferenceTargetType::Array(Arc::new(Mutex::new(array))), //target type
-						0,                                                       // access,
+						0,                                                // access,
 					);
 					frame.operand_stack.push(v);
 				} else {

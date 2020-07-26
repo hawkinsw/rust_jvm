@@ -70,14 +70,14 @@ pub enum JvmReferenceTargetType {
 #[derive(Clone)]
 pub enum JvmReferenceType {
 	Null,
-	Array(Rc<JvmType>, u64),
+	Array(Rc<JvmType>, u32),
 	Class(String),
 	Interface(String),
 }
 
 #[derive(Clone)]
 pub enum JvmValue {
-	Primitive(JvmPrimitiveType, u64, u16),
+	Primitive(JvmPrimitiveType, u64, u32, u16),
 	Reference(JvmReferenceType, JvmReferenceTargetType, u16),
 }
 
@@ -111,8 +111,12 @@ impl fmt::Display for JvmReferenceType {
 impl fmt::Display for JvmValue {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			JvmValue::Primitive(tipe, value, access) => {
-				return write!(f, "Value: {}: {} (access: {:x})", tipe, value, access)
+			JvmValue::Primitive(tipe, value64, value32, access) => {
+				return write!(
+					f,
+					"Value: {}: {}-64 {}-32 (access: {:x})",
+					tipe, value64, value32, access
+				)
 			}
 			JvmValue::Reference(tipe, value, access) => match value {
 				JvmReferenceTargetType::Array(array) => {
@@ -182,8 +186,8 @@ impl PartialEq for JvmType {
 impl PartialEq for JvmValue {
 	fn eq(&self, other: &Self) -> bool {
 		match self {
-			JvmValue::Primitive(t, v, _) => match other {
-				JvmValue::Primitive(ot, ov, _) => ot == t && ov == v,
+			JvmValue::Primitive(t, v64, v32, _) => match other {
+				JvmValue::Primitive(ot, ov64, ov32, _) => ot == t && ov64 == v64 && ov32 == v32,
 				_ => false,
 			},
 			JvmValue::Reference(t, v, _) => match other {
