@@ -279,9 +279,20 @@ impl JvmThread {
 			}
 			Some(OperandCode::Fconst_0) => {
 				Debug(format!("fconst_0"), &self.debug_level, DebugLevel::Info);
+				let fzero = 0.0f32;
+				let uzero = u32::from_le_bytes(fzero.to_le_bytes());
 				frame
 					.operand_stack
-					.push(JvmValue::Primitive(JvmPrimitiveType::Float, 0, 0, 0));
+					.push(JvmValue::Primitive(JvmPrimitiveType::Float, 0, uzero, 0));
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fconst_1) => {
+				Debug(format!("fconst_1"), &self.debug_level, DebugLevel::Info);
+				let fone = 1.0f32;
+				let uone = u32::from_le_bytes(fone.to_le_bytes());
+				frame
+					.operand_stack
+					.push(JvmValue::Primitive(JvmPrimitiveType::Float, 0, uone, 0));
 				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Bipush) => {
@@ -368,6 +379,12 @@ impl JvmThread {
 				Debug(format!("caload"), &self.debug_level, DebugLevel::Info);
 				self.execute_caload(frame);
 				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fstore) => {
+				Debug(format!("fstore"), &self.debug_level, DebugLevel::Info);
+				let index = bytes[1];
+				self.execute_fstore(index as usize, frame);
+				OpcodeResult::Incr(2)
 			}
 			Some(OperandCode::Istore_0) => {
 				Debug(format!("istore_0"), &self.debug_level, DebugLevel::Info);
@@ -467,9 +484,24 @@ impl JvmThread {
 				self.execute_fadd(frame);
 				OpcodeResult::Incr(1)
 			}
+			Some(OperandCode::Fsub) => {
+				Debug(format!("fsub"), &self.debug_level, DebugLevel::Info);
+				self.execute_fsub(frame);
+				OpcodeResult::Incr(1)
+			}
 			Some(OperandCode::Imul) => {
 				Debug(format!("imul"), &self.debug_level, DebugLevel::Info);
 				self.execute_imul(frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fmul) => {
+				Debug(format!("fmul"), &self.debug_level, DebugLevel::Info);
+				self.execute_fmul(frame);
+				OpcodeResult::Incr(1)
+			}
+			Some(OperandCode::Fdiv) => {
+				Debug(format!("fdiv"), &self.debug_level, DebugLevel::Info);
+				self.execute_fdiv(frame);
 				OpcodeResult::Incr(1)
 			}
 			cmpop @ Some(OperandCode::If_icmpeq)
@@ -480,7 +512,13 @@ impl JvmThread {
 			| cmpop @ Some(OperandCode::If_icmplt) => self.execute_icmp(frame, bytes, cmpop.unwrap()),
 			Some(OperandCode::Goto) => {
 				Debug(format!("goto"), &self.debug_level, DebugLevel::Info);
-				OpcodeResult::Incr((((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize)
+				let branch_target = i16::from_be_bytes([bytes[1], bytes[2]]);
+
+				if branch_target < 0 {
+					OpcodeResult::Decr(branch_target.abs() as usize)
+				} else {
+					OpcodeResult::Incr(branch_target.abs() as usize)
+				}
 			}
 			Some(OperandCode::Ireturn) => {
 				Debug(format!("ireturn"), &self.debug_level, DebugLevel::Info);
@@ -799,16 +837,112 @@ impl JvmThread {
 		}
 	}
 
+	fn execute_fsub(&mut self, frame: &mut Frame) {
+		Debug(
+			format!("fsub frame (pre): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op2, _)) =
+			frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op1, _)) =
+				frame.operand_stack.pop()
+			{
+				let fop1 = f32::from_le_bytes(op1.to_le_bytes());
+				let fop2 = f32::from_le_bytes(op2.to_le_bytes());
+				let res = fop1 - fop2;
+				let res_value = u32::from_le_bytes(res.to_le_bytes());
+
+				frame.operand_stack.push(JvmValue::Primitive(
+					JvmPrimitiveType::Float,
+					0,
+					res_value,
+					0,
+				));
+			}
+		}
+		Debug(
+			format!("fsub frame (post): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+	}
+
+	fn execute_fdiv(&mut self, frame: &mut Frame) {
+		Debug(
+			format!("fdiv frame (pre): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op2, _)) =
+			frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op1, _)) =
+				frame.operand_stack.pop()
+			{
+				let fop1 = f32::from_le_bytes(op1.to_le_bytes());
+				let fop2 = f32::from_le_bytes(op2.to_le_bytes());
+				let res = fop1 / fop2;
+				let res_value = u32::from_le_bytes(res.to_le_bytes());
+
+				frame.operand_stack.push(JvmValue::Primitive(
+					JvmPrimitiveType::Float,
+					0,
+					res_value,
+					0,
+				));
+			}
+		}
+		Debug(
+			format!("fdiv frame (post): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+	}
+
+	fn execute_fmul(&mut self, frame: &mut Frame) {
+		Debug(
+			format!("fmul frame (pre): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op2, _)) =
+			frame.operand_stack.pop()
+		{
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op1, _)) =
+				frame.operand_stack.pop()
+			{
+				let fop1 = f32::from_le_bytes(op1.to_le_bytes());
+				let fop2 = f32::from_le_bytes(op2.to_le_bytes());
+				let res = fop1 * fop2;
+				let res_value = u32::from_le_bytes(res.to_le_bytes());
+
+				frame.operand_stack.push(JvmValue::Primitive(
+					JvmPrimitiveType::Float,
+					0,
+					res_value,
+					0,
+				));
+			}
+		}
+		Debug(
+			format!("fmul frame (post): {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+	}
+
 	fn execute_fadd(&mut self, frame: &mut Frame) {
 		Debug(
 			format!("fadd frame (pre): {}", frame),
 			&self.debug_level,
 			DebugLevel::Info,
 		);
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op1, _)) =
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op2, _)) =
 			frame.operand_stack.pop()
 		{
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op2, _)) =
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Float, _, op1, _)) =
 				frame.operand_stack.pop()
 			{
 				let fop1 = f32::from_le_bytes(op1.to_le_bytes());
@@ -1475,6 +1609,40 @@ impl JvmThread {
 			FatalError::new(FatalErrorType::NotEnough(
 				format!("fstore"),
 				x,
+				format!("locals"),
+			))
+			.call();
+		}
+	}
+	fn execute_fstore(&self, index: usize, frame: &mut Frame) {
+		Debug(
+			format!("Frame before fstore_x: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+		if index < frame.locals.len() {
+			if let Some(top) = frame.operand_stack.pop() {
+				if let JvmValue::Primitive(JvmPrimitiveType::Float, value64, value32, access) = top
+				{
+					frame.locals[index] =
+						JvmValue::Primitive(JvmPrimitiveType::Float, value64, value32, access);
+				} else {
+					FatalError::new(FatalErrorType::WrongType(
+						format!("fstore"),
+						format!("float primitive"),
+					))
+					.call();
+				}
+			} else {
+				FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+					"fstore"
+				)))
+				.call();
+			}
+		} else {
+			FatalError::new(FatalErrorType::NotEnough(
+				format!("fstore"),
+				index,
 				format!("locals"),
 			))
 			.call();
