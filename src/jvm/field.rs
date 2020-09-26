@@ -19,13 +19,13 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::sync::{Arc, Mutex};
 use jvm::attribute::Attributes;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
 use jvm::typevalues::JvmValue;
 use std::fmt;
 use std::iter::repeat;
-use std::rc::Rc;
 
 #[repr(u16)]
 pub enum FieldAccessFlags {
@@ -48,7 +48,7 @@ pub struct Field {
 	pub descriptor_index: u16,
 	pub attributes_count: u16,
 	pub attributes: Attributes,
-	pub value: Option<Rc<JvmValue>>,
+	pub value: Arc<Mutex<Option<JvmValue>>>,
 }
 
 impl Field {
@@ -93,7 +93,7 @@ impl<'l> From<&'l Vec<u8>> for Field {
 			descriptor_index,
 			attributes_count: attributes.attributes_count(),
 			attributes,
-			value: None,
+			value: Arc::new(Mutex::new(None)),
 		}
 	}
 }
@@ -136,24 +136,6 @@ impl Fields {
 						println!("Found the field!");
 						return Some(field);
 					}
-				}
-			}
-		}
-		None
-	}
-	
-	pub fn set_field_value(&mut self, name: &str, cp: &ConstantPool, value: &Rc<JvmValue>) -> Option<&Field> {
-		for field in &mut self.fields
-		{
-			if let Constant::Utf8(_, _, _, current_name) = cp.get_constant_ref(field.name_index as usize)
-			{
-				if name != current_name {
-					continue;
-				}
-				if let Constant::Utf8(_, _, _, current_descriptor) =
-					cp.get_constant_ref(field.descriptor_index as usize)
-				{
-					field.value = Some(Rc::clone(value));
 				}
 			}
 		}

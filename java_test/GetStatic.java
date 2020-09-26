@@ -5,6 +5,8 @@ public class GetStatic {
 		int a = 0;
 		if (hello > 100) {
 			hello = 1;
+		} else {
+			hello = 2;
 		}
 	}
 }

@@ -6,6 +6,7 @@ pub enum FatalErrorType {
 	CouldNotLock(String, String),
 	ClassNotLoaded(String),
 	ClassInstantiationFailed(String),
+	ClassResolutionFailed(String),
 	ClassNoName,
 	WrongType(String, String),
 	NotEnough(String, usize, String),
@@ -14,6 +15,7 @@ pub enum FatalErrorType {
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
 	InvalidFieldType(char),
+	FieldNotFound(String, String),
 	InvalidMethodDescriptor,
 	InvalidConstantReference(String, String, u16),
 	VoidMethodReturnedValue,
@@ -29,6 +31,9 @@ pub enum FatalErrorType {
 impl fmt::Display for FatalErrorType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
+			FatalErrorType::ClassResolutionFailed(c) => {
+				write!(f, "Could not resolve {}.", c)
+			}
 			FatalErrorType::ClassNotFound(c) => {
 				write!(f, "Class {} is required, but couldn't be found.", c)
 			}
@@ -68,6 +73,7 @@ impl fmt::Display for FatalErrorType {
 				index, class, expected
 			),
 			FatalErrorType::InvalidFieldType(field) => write!(f, "Invalid field type: {}.", field),
+			FatalErrorType::FieldNotFound(field, class) => write!(f, "Could not find field {} in class {}.", field, class),
 			FatalErrorType::MethodExecutionFailed(method) => {
 				write!(f, "Method {} failed to execute.", method)
 			}

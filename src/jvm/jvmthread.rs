@@ -2009,15 +2009,13 @@ impl JvmThread {
 				DebugLevel::Info,
 			);
 			let mut resolved_field_class: Option<Rc<Class>> = None;
-			let mut resolved_field_class_name: String = "".to_string();
 
 			if let Ok(mut methodarea) = self.methodarea.lock() {
 				(*methodarea).maybe_load_class(&field_class_name);
 				if let Some(field_class) = (*methodarea).get_class_rc(&field_class_name) {
-					if let Some(_resolved_field_class_name) =
+					if let Some(resolved_field_class_name) =
 						(*methodarea).resolve_field(&field_class, &field_name, &field_type)
 					{
-						resolved_field_class_name = _resolved_field_class_name;
 						// TODO: I think that this should be resolved_field_class_name
 						// As it stands now, this is a repetition of the maybe_load_class
 						// on line 2023.
@@ -2038,16 +2036,33 @@ impl JvmThread {
 				self.maybe_initialize_class(&resolved_field_class);
 				let resolved_field_class_constant_pool = resolved_field_class.get_constant_pool_ref();
 				if let Some(_field_ref) = resolved_field_class.get_fields_ref().get_field_ref(&field_name, &field_type, resolved_field_class_constant_pool)  {
-					if let Some(field_ref_value) = _field_ref.value.clone() {
-						source_frame.operand_stack.push((*field_ref_value).clone());
+					if let Ok(_field_ref_value) = _field_ref.value.lock() {
+						if let Some(field_ref_value) = (*_field_ref_value).clone() {
+							source_frame.operand_stack.push(field_ref_value);
+						} else {
+							// There must be a value here, per the rules of static fields.
+						}
 					} else {
-						println!("We should not be here.");
+						FatalError::new(FatalErrorType::CouldNotLock(
+							field_name,
+							"PutStatic".to_string(),
+						))
+						.call();
 					}
 				} else {
+					// Field not found
 					println!("We should not be here either.");
+					FatalError::new(FatalErrorType::FieldNotFound(
+						field_name,
+						field_class_name
+					))
+					.call();
 				}
 			} else {
-				println!("Nor should we be here either.");
+				FatalError::new(FatalErrorType::ClassResolutionFailed(
+					field_class_name	
+				))
+				.call();
 			}
 		} else {
 			FatalError::new(FatalErrorType::InvalidConstantReference(
@@ -2079,15 +2094,13 @@ impl JvmThread {
 				DebugLevel::Info,
 			);
 			let mut resolved_field_class: Option<Rc<Class>> = None;
-			let mut resolved_field_class_name: String = "".to_string();
 
 			if let Ok(mut methodarea) = self.methodarea.lock() {
 				(*methodarea).maybe_load_class(&field_class_name);
 				if let Some(field_class) = (*methodarea).get_class_rc(&field_class_name) {
-					if let Some(_resolved_field_class_name) =
+					if let Some(resolved_field_class_name) =
 						(*methodarea).resolve_field(&field_class, &field_name, &field_type)
 					{
-						resolved_field_class_name = _resolved_field_class_name;
 						(*methodarea).maybe_load_class(&resolved_field_class_name);
 						resolved_field_class =
 							(*methodarea).get_class_rc(&resolved_field_class_name);
@@ -2096,7 +2109,7 @@ impl JvmThread {
 			} else {
 				FatalError::new(FatalErrorType::CouldNotLock(
 					"Method Area.".to_string(),
-					"execute_getstatic".to_string(),
+					"execute_putstatic".to_string(),
 				))
 				.call();
 			}
@@ -2104,9 +2117,11 @@ impl JvmThread {
 			if let Some(resolved_field_class) = resolved_field_class {
 				self.maybe_initialize_class(&resolved_field_class);
 				let resolved_field_class_constant_pool = resolved_field_class.get_constant_pool_ref();
-				if let Some(_field_ref) = resolved_field_class.get_mut_fields_ref().get_field_ref(&field_name, &field_type, resolved_field_class_constant_pool)  {
+				if let Some(field_ref) = resolved_field_class.get_fields_ref().get_field_ref(&field_name, &field_type, resolved_field_class_constant_pool)  {
 					if let Some(top) = source_frame.operand_stack.pop() {
-						resolved_field_class.get_mut_fields_ref().set_field_value(&field_name, &resolved_field_class_constant_pool, &Rc::new(top));
+						if let Ok(mut field_value) = field_ref.value.lock() {
+							*field_value= Some(top);	
+						}
 					} else {
 						println!("We should not be here.");
 					}
