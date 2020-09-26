@@ -224,9 +224,14 @@ impl Class {
 		&self.methods
 	}
 
+	pub fn get_mut_fields_ref(&mut self) -> &mut Fields {
+		&mut self.fields
+	}
+
 	pub fn get_fields_ref(&self) -> &Fields {
 		&self.fields
 	}
+
 
 	pub fn get_class_name(&self) -> Option<String> {
 		match self

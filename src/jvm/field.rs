@@ -121,6 +121,45 @@ impl Fields {
 		self.fields.len() as u16
 	}
 
+	pub fn get_field_ref(&self, name: &str, r#type: &str, cp: &ConstantPool) -> Option<&Field> {
+		for field in &self.fields
+		{
+			if let Constant::Utf8(_, _, _, current_name) = cp.get_constant_ref(field.name_index as usize)
+			{
+				if name != current_name {
+					continue;
+				}
+				if let Constant::Utf8(_, _, _, current_descriptor) =
+					cp.get_constant_ref(field.descriptor_index as usize)
+				{
+					if r#type == current_descriptor {
+						println!("Found the field!");
+						return Some(field);
+					}
+				}
+			}
+		}
+		None
+	}
+	
+	pub fn set_field_value(&mut self, name: &str, cp: &ConstantPool, value: &Rc<JvmValue>) -> Option<&Field> {
+		for field in &mut self.fields
+		{
+			if let Constant::Utf8(_, _, _, current_name) = cp.get_constant_ref(field.name_index as usize)
+			{
+				if name != current_name {
+					continue;
+				}
+				if let Constant::Utf8(_, _, _, current_descriptor) =
+					cp.get_constant_ref(field.descriptor_index as usize)
+				{
+					field.value = Some(Rc::clone(value));
+				}
+			}
+		}
+		None
+	}
+
 	pub fn contains_field_with_name_and_type(
 		&self,
 		name: &String,

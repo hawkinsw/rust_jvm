@@ -81,6 +81,7 @@ enum_from_primitive! {
 		Ireturn = 0xac,
 		r#Return = 0xb1,
 		GetStatic = 0xb2,
+		PutStatic = 0xb3,
 		GetField = 0xb4,
 		PutField = 0xb5,
 		Invokevirtual = 0xb6,

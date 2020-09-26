@@ -203,6 +203,10 @@ impl MethodArea {
 		result
 	}
 
+	// Return the name of the class that contains the referenced field.
+	// field_class: The class where the reference originally occured.
+	// field_name: The name of the field.
+	// field_type: The type of the field.
 	pub fn resolve_field(
 		&mut self,
 		field_class: &Rc<Class>,

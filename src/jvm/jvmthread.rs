@@ -530,13 +530,14 @@ impl JvmThread {
 			}
 			Some(OperandCode::GetStatic) => {
 				Debug(format!("getstatic"), &self.debug_level, DebugLevel::Info);
-				if let Some(_) = self.execute_getstatic(bytes, frame) {
-				} else {
-					FatalError::new(FatalErrorType::NotImplemented(format!("0x{:x}", opcode)))
-						.call();
-				}
+				self.execute_getstatic(bytes, frame);
 				OpcodeResult::Incr(3)
 			}
+			Some(OperandCode::PutStatic) => {
+				Debug(format!("putstatic"), &self.debug_level, DebugLevel::Info);
+				self.execute_putstatic(bytes, frame);
+				OpcodeResult::Incr(3)
+			}	
 			Some(OperandCode::GetField) => {
 				Debug(format!("getfield"), &self.debug_level, DebugLevel::Info);
 				self.execute_getfield(((bytes[1] as u16) << 8) | (bytes[2] as u16) as u16, frame);
@@ -1986,11 +1987,12 @@ impl JvmThread {
 			}
 		}
 	}
+
 	fn execute_getstatic(
 		&mut self,
 		bytes: &[u8],
 		source_frame: &mut Frame,
-	) -> Option<OpcodeResult> {
+	) {
 		let class = source_frame.class().unwrap();
 		let constant_pool = class.get_constant_pool_ref();
 		let field_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
@@ -2016,6 +2018,9 @@ impl JvmThread {
 						(*methodarea).resolve_field(&field_class, &field_name, &field_type)
 					{
 						resolved_field_class_name = _resolved_field_class_name;
+						// TODO: I think that this should be resolved_field_class_name
+						// As it stands now, this is a repetition of the maybe_load_class
+						// on line 2023.
 						(*methodarea).maybe_load_class(&field_class_name);
 						resolved_field_class =
 							(*methodarea).get_class_rc(&resolved_field_class_name);
@@ -2029,15 +2034,20 @@ impl JvmThread {
 				.call();
 			}
 
-			/*
-			 * Now it's time to execute clinit.
-			 */
 			if let Some(resolved_field_class) = resolved_field_class {
 				self.maybe_initialize_class(&resolved_field_class);
+				let resolved_field_class_constant_pool = resolved_field_class.get_constant_pool_ref();
+				if let Some(_field_ref) = resolved_field_class.get_fields_ref().get_field_ref(&field_name, &field_type, resolved_field_class_constant_pool)  {
+					if let Some(field_ref_value) = _field_ref.value.clone() {
+						source_frame.operand_stack.push((*field_ref_value).clone());
+					} else {
+						println!("We should not be here.");
+					}
+				} else {
+					println!("We should not be here either.");
+				}
 			} else {
-				/*
-				 * TODO: This is a fatal error.
-				 */
+				println!("Nor should we be here either.");
 			}
 		} else {
 			FatalError::new(FatalErrorType::InvalidConstantReference(
@@ -2047,8 +2057,76 @@ impl JvmThread {
 			))
 			.call();
 		}
-		println!("For some reason we are returning None!");
-		return None;
+	}
+
+	fn execute_putstatic(
+		&mut self,
+		bytes: &[u8],
+		source_frame: &mut Frame,
+	) {
+		let class = source_frame.class().unwrap();
+		let field_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
+
+		if let Some((field_class_name, field_name, field_type)) =
+			class.resolve_field_ref(field_index)
+		{
+			Debug(
+				format!(
+					"put static: {}.{} ({})",
+					field_class_name, field_name, field_type
+				),
+				&self.debug_level,
+				DebugLevel::Info,
+			);
+			let mut resolved_field_class: Option<Rc<Class>> = None;
+			let mut resolved_field_class_name: String = "".to_string();
+
+			if let Ok(mut methodarea) = self.methodarea.lock() {
+				(*methodarea).maybe_load_class(&field_class_name);
+				if let Some(field_class) = (*methodarea).get_class_rc(&field_class_name) {
+					if let Some(_resolved_field_class_name) =
+						(*methodarea).resolve_field(&field_class, &field_name, &field_type)
+					{
+						resolved_field_class_name = _resolved_field_class_name;
+						(*methodarea).maybe_load_class(&resolved_field_class_name);
+						resolved_field_class =
+							(*methodarea).get_class_rc(&resolved_field_class_name);
+					}
+				}
+			} else {
+				FatalError::new(FatalErrorType::CouldNotLock(
+					"Method Area.".to_string(),
+					"execute_getstatic".to_string(),
+				))
+				.call();
+			}
+
+			if let Some(resolved_field_class) = resolved_field_class {
+				self.maybe_initialize_class(&resolved_field_class);
+				let resolved_field_class_constant_pool = resolved_field_class.get_constant_pool_ref();
+				if let Some(_field_ref) = resolved_field_class.get_mut_fields_ref().get_field_ref(&field_name, &field_type, resolved_field_class_constant_pool)  {
+					if let Some(top) = source_frame.operand_stack.pop() {
+						resolved_field_class.get_mut_fields_ref().set_field_value(&field_name, &resolved_field_class_constant_pool, &Rc::new(top));
+					} else {
+						println!("We should not be here.");
+					}
+				} else {
+					println!("We should not be here either.");
+				}
+			} else {
+				/*
+				 * TODO: This is a fatal error.
+				 */
+				println!("Nor should we be here.");
+			}
+		} else {
+			FatalError::new(FatalErrorType::InvalidConstantReference(
+				class.get_class_name().unwrap(),
+				"FieldRef".to_string(),
+				field_index as u16,
+			))
+			.call();
+		}
 	}
 
 	fn execute_getfield(&mut self, index: u16, frame: &mut Frame) {
