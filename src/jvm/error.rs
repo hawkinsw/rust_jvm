@@ -15,6 +15,7 @@ pub enum FatalErrorType {
 	MainMethodNotPublicStatic,
 	MainMethodNotVoid,
 	InvalidFieldType(char),
+	UninitializedField(String, String),
 	FieldNotFound(String, String),
 	InvalidMethodDescriptor,
 	InvalidConstantReference(String, String, u16),
@@ -73,6 +74,7 @@ impl fmt::Display for FatalErrorType {
 				index, class, expected
 			),
 			FatalErrorType::InvalidFieldType(field) => write!(f, "Invalid field type: {}.", field),
+			FatalErrorType::UninitializedField(field, class) => write!(f, "Use of Uninitialized field {}.{}.", class, field),
 			FatalErrorType::FieldNotFound(field, class) => write!(f, "Could not find field {} in class {}.", field, class),
 			FatalErrorType::MethodExecutionFailed(method) => {
 				write!(f, "Method {} failed to execute.", method)

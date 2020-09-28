@@ -1005,21 +1005,35 @@ impl JvmThread {
 			&self.debug_level,
 			DebugLevel::Info,
 		);
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, op1, _)) =
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, _op1, _)) =
 			frame.operand_stack.pop()
 		{
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, op2, _)) =
+			let op1 = _op1 as i32;
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, _op2, _)) =
 				frame.operand_stack.pop()
 			{
-				FatalError::new(FatalErrorType::Todo(format!("This needs to account for the fact that we are storing ints in us. Look at fadd for an example."))).call();
+				let op2 = _op2 as i32;
 				frame.operand_stack.push(JvmValue::Primitive(
 					JvmPrimitiveType::Integer,
 					0,
-					op1 + op2,
+					(op1 + op2) as u32,
 					0,
 				));
+			} else {
+				FatalError::new(FatalErrorType::WrongType(
+					"Iadd".to_string(),
+					"Integer".to_string(),
+				))
+				.call();
 			}
+		} else {
+			FatalError::new(FatalErrorType::WrongType(
+				"Iadd".to_string(),
+				"Integer".to_string(),
+			))
+			.call();
 		}
+
 	}
 	fn execute_imul(&mut self, frame: &mut Frame) {
 		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, op1, _)) =
@@ -1047,12 +1061,14 @@ impl JvmThread {
 		let mut pc_incr: usize = 3;
 		let success_incr: usize = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 		let fail_incr: usize = 3 as usize;
-		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, value2, _)) =
+		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, _value2, _)) =
 			frame.operand_stack.pop()
 		{
-			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, value1, _)) =
+			let value2 = _value2 as i32;
+			if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, _value1, _)) =
 				frame.operand_stack.pop()
 			{
+				let value1 = _value1 as i32;
 				pc_incr = match operation {
 					OperandCode::If_icmpeq => {
 						Debug(format!("If_icmpeq"), &self.debug_level, DebugLevel::Info);
@@ -1682,11 +1698,11 @@ impl JvmThread {
 		}
 	}
 
-	fn execute_iconst_x(&mut self, x: i64, frame: &mut Frame) {
+	fn execute_iconst_x(&mut self, x: i32, frame: &mut Frame) {
 		frame.operand_stack.push(JvmValue::Primitive(
 			JvmPrimitiveType::Integer,
-			x as u64,
 			0,
+			x as u32,
 			0,
 		));
 	}
@@ -2040,7 +2056,11 @@ impl JvmThread {
 						if let Some(field_ref_value) = (*_field_ref_value).clone() {
 							source_frame.operand_stack.push(field_ref_value);
 						} else {
-							// There must be a value here, per the rules of static fields.
+							FatalError::new(FatalErrorType::UninitializedField(
+								field_name,
+								field_class_name,
+							))
+							.call();
 						}
 					} else {
 						FatalError::new(FatalErrorType::CouldNotLock(
@@ -2050,8 +2070,6 @@ impl JvmThread {
 						.call();
 					}
 				} else {
-					// Field not found
-					println!("We should not be here either.");
 					FatalError::new(FatalErrorType::FieldNotFound(
 						field_name,
 						field_class_name
@@ -2122,17 +2140,25 @@ impl JvmThread {
 						if let Ok(mut field_value) = field_ref.value.lock() {
 							*field_value= Some(top);	
 						}
-					} else {
-						println!("We should not be here.");
+				} else {
+						FatalError::new(FatalErrorType::CouldNotLock(
+							field_name,
+							"GetStatic".to_string(),
+						))
+						.call();
 					}
 				} else {
-					println!("We should not be here either.");
+					FatalError::new(FatalErrorType::FieldNotFound(
+						field_name,
+						field_class_name
+					))
+					.call();
 				}
 			} else {
-				/*
-				 * TODO: This is a fatal error.
-				 */
-				println!("Nor should we be here.");
+				FatalError::new(FatalErrorType::ClassResolutionFailed(
+					field_class_name	
+				))
+				.call();
 			}
 		} else {
 			FatalError::new(FatalErrorType::InvalidConstantReference(
