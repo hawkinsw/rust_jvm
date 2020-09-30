@@ -2030,7 +2030,11 @@ impl JvmThread {
 								DebugLevel::Info,
 							);
 
-							println!("hierarchy: {}", object.hierarchy());
+							Debug(
+								format!("hierarchy: {}", object.hierarchy()),
+								&self.debug_level,
+								DebugLevel::Info,
+							);
 
 							result = Some(JvmValue::Reference(
 								JvmReferenceType::Class(instantiated_class_name.to_string()),
@@ -2271,9 +2275,21 @@ impl JvmThread {
 					}
 				}
 
-				println!("field_class_name: {}", field_class_name.unwrap());
-				println!("field_name: {}", field_name.unwrap());
-				println!("field_type: {}", field_type.unwrap());
+				Debug(
+					format!("field_class_name: {}", field_class_name.unwrap()),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				Debug(
+					format!("field_name: {}", field_name.unwrap()),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
+				Debug(
+					format!("field_type: {}", field_type.unwrap()),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
 
 				if let JvmValue::Reference(
 					JvmReferenceType::Class(objectref_class_name),
@@ -2281,7 +2297,6 @@ impl JvmThread {
 					_,
 				) = objectref
 				{
-					println!("objectref_class_name: {}", objectref_class_name);
 					if let Ok(mut objectref_object) = objectref_object.lock() {
 						if let Ok(mut methodarea) = self.methodarea.lock() {
 							if objectref_object
@@ -2291,22 +2306,34 @@ impl JvmThread {
 								if let Some(field_value) =
 									objectref_object.get_field(field_name.unwrap())
 								{
-									println!("Pushing a {}", *field_value);
 									frame.operand_stack.push((*field_value).clone())
 								} else {
-									println!("Ooops0");
+									FatalError::new(FatalErrorType::Todo(format!("Document")))
+										.call();
 								}
 							} else {
-								println!("Ooops1");
+								FatalError::new(FatalErrorType::Todo(format!("Document"))).call();
 							}
 						} else {
-							println!("Ooops2");
+							FatalError::new(FatalErrorType::CouldNotLock(
+								"Method Area.".to_string(),
+								"get_field".to_string(),
+							))
+							.call();
 						}
 					} else {
-						println!("Ooops3");
+						FatalError::new(FatalErrorType::CouldNotLock(
+							objectref_class_name,
+							"get_field".to_string(),
+						))
+						.call();
 					}
 				} else {
-					println!("Ooops4");
+					FatalError::new(FatalErrorType::WrongType(
+						format!("execute_getfield"),
+						format!("Reference"),
+					))
+					.call();
 				}
 			}
 		}
@@ -2361,9 +2388,21 @@ impl JvmThread {
 						}
 					}
 
-					println!("field_class_name: {}", field_class_name.unwrap());
-					println!("field_name: {}", field_name.unwrap());
-					println!("field_type: {}", field_type.unwrap());
+					Debug(
+						format!("field_class_name: {}", field_class_name.unwrap()),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					Debug(
+						format!("field_name: {}", field_name.unwrap()),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
+					Debug(
+						format!("field_type: {}", field_type.unwrap()),
+						&self.debug_level,
+						DebugLevel::Info,
+					);
 
 					if let JvmValue::Reference(
 						JvmReferenceType::Class(objectref_class_name),
@@ -2371,7 +2410,11 @@ impl JvmThread {
 						_,
 					) = objectref
 					{
-						println!("objectref_class_name: {}", objectref_class_name);
+						Debug(
+							format!("objectref_class_name: {}", objectref_class_name),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
 						if let Ok(mut objectref_object) = objectref_object.lock() {
 							if let Ok(mut methodarea) = self.methodarea.lock() {
 								if objectref_object

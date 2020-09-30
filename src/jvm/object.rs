@@ -165,7 +165,13 @@ impl JvmObject {
 						JvmReferenceTargetType::Array(Arc::new(Mutex::new(JvmArray::new(0)))),
 						0,
 					),
-					_ => create_null_value(),
+					_ => {
+						FatalError::new(FatalErrorType::NotImplemented(format!(
+							"Getting a reference type field other than an array."
+						)))
+						.call();
+						create_null_value()
+					}
 				},
 			};
 
