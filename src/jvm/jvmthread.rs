@@ -242,6 +242,11 @@ impl JvmThread {
 			DebugLevel::Info,
 		);
 		match OperandCode::from_u8(opcode) {
+			Some(OperandCode::Aconst_null) => {
+				Debug(format!("aconst_null"), &self.debug_level, DebugLevel::Info);
+				frame.operand_stack.push(create_null_value());
+				OpcodeResult::Incr(1)
+			}
 			Some(OperandCode::Iconst_m1) => {
 				Debug(format!("iconst_m1"), &self.debug_level, DebugLevel::Info);
 				self.execute_iconst_x(-1, frame);
@@ -680,6 +685,46 @@ impl JvmThread {
 					.call();
 					OpcodeResult::Incr(3)
 				}
+			}
+			Some(OperandCode::ArrayLength) => {
+				Debug(format!("ArrayLength"), &self.debug_level, DebugLevel::Info);
+		Debug(
+			format!("Frame before arraylength: {}", frame),
+			&self.debug_level,
+			DebugLevel::Info,
+		);
+
+
+				if let Some(array_ref) = frame.operand_stack.pop() {
+					if let JvmValue::Reference(JvmReferenceType::Array(_, _), JvmReferenceTargetType::Array(array), _) = array_ref
+					{
+						// Try to lock the array.
+						if let Ok(array) = array.lock() {
+							let array_length = array.dimension();
+							frame.operand_stack.push(JvmValue::Primitive(JvmPrimitiveType::Integer, 0, array_length as u32, 0));
+						}
+						Debug(
+							format!("frame after new: {}", frame),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+					} else {
+						// Wrong type for the count
+						FatalError::new(FatalErrorType::WrongType(
+							format!("arraylength"),
+							format!("reference to an array"),
+						))
+						.call();
+					}
+				} else {
+					// Missing a count on the stack!
+					FatalError::new(FatalErrorType::RequiredStackValueNotFound(format!(
+						"anewarray"
+					)))
+					.call();
+				}
+
+				OpcodeResult::Incr(1)
 			}
 			Some(OperandCode::Fcmpgt) | Some(OperandCode::Fcmplt) => {
 				Debug(
@@ -1558,15 +1603,15 @@ impl JvmThread {
 
 		match constant_pool.get_constant_ref(instantiated_class_index) {
 			Constant::String(_, string_index) => {
-				let string_object = create_static_string_object(
+				if let Some(string_object) = create_static_string_object(
 					format!("Testing"),
 					self,
 					Arc::clone(&self.methodarea),
-				);
-				FatalError::new(FatalErrorType::NotImplemented(format!(
-					"execute_ldc (string)"
-				)))
-				.call();
+				) {
+					frame.operand_stack.push(JvmValue::Reference(JvmReferenceType::Class(format!("java/lang/String")), JvmReferenceTargetType::Object(Arc::new(Mutex::new(string_object))), 0));
+				} else {
+					FatalError::new(FatalErrorType::Todo(format!("Handle this abnormal condition."))).call();
+				}
 			}
 			Constant::Integer(_, value) => {
 				let constant_int = JvmValue::Primitive(JvmPrimitiveType::Integer, 0, *value, 0);
@@ -1965,6 +2010,12 @@ impl JvmThread {
 								JvmObject::new(instantiated_class, self.debug_level.clone());
 
 							object.instantiate(self, Arc::clone(&self.methodarea));
+						Debug(
+							format!("Made a new {}.", instantiated_class_name),
+							&self.debug_level,
+							DebugLevel::Info,
+						);
+
 
 							println!("hierarchy: {}", object.hierarchy());
 
@@ -2237,13 +2288,22 @@ impl JvmThread {
 								if let Some(field_value) =
 									objectref_object.get_field(field_name.unwrap())
 								{
+									println!("Pushing a {}", *field_value);
 									frame.operand_stack.push((*field_value).clone())
+								} else {
+									println!("Ooops0");
 								}
+							} else {
+								println!("Ooops1");
 							}
+						} else {
+							println!("Ooops2");
 						}
+					} else {
+						println!("Ooops3");
 					}
 				} else {
-					// Object ref ahs to be a classref.
+					println!("Ooops4");
 				}
 			}
 		}

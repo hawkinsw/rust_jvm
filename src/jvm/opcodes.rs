@@ -23,6 +23,7 @@
 
 enum_from_primitive! {
 	pub enum OperandCode {
+		Aconst_null = 0x1,
 		Iconst_m1 = 0x2,
 		Iconst_0 = 0x3,
 		Iconst_1 = 0x4,
@@ -90,6 +91,7 @@ enum_from_primitive! {
 		New = 0xbb,
 		NewArray = 0xbc,
 		ANewArray = 0xbd,
+		ArrayLength = 0xbe,
 		Fcmplt = 0x95,
 		Fcmpgt = 0x96,
 		Ifeq = 0x99,

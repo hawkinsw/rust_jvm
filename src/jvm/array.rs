@@ -65,6 +65,10 @@ impl JvmArray {
 	pub fn get_at(&mut self, index: usize) -> &Option<JvmValue> {
 		&self.values[index]
 	}
+
+	pub fn dimension(&self) -> usize {
+		self.dimension
+	}
 }
 
 impl fmt::Display for JvmArray {
