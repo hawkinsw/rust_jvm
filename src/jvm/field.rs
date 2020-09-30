@@ -19,13 +19,13 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::sync::{Arc, Mutex};
 use jvm::attribute::Attributes;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
 use jvm::typevalues::JvmValue;
 use std::fmt;
 use std::iter::repeat;
+use std::sync::{Arc, Mutex};
 
 #[repr(u16)]
 pub enum FieldAccessFlags {
@@ -122,9 +122,9 @@ impl Fields {
 	}
 
 	pub fn get_field_ref(&self, name: &str, r#type: &str, cp: &ConstantPool) -> Option<&Field> {
-		for field in &self.fields
-		{
-			if let Constant::Utf8(_, _, _, current_name) = cp.get_constant_ref(field.name_index as usize)
+		for field in &self.fields {
+			if let Constant::Utf8(_, _, _, current_name) =
+				cp.get_constant_ref(field.name_index as usize)
 			{
 				if name != current_name {
 					continue;

@@ -232,7 +232,6 @@ impl Class {
 		&self.fields
 	}
 
-
 	pub fn get_class_name(&self) -> Option<String> {
 		match self
 			.constant_pool

@@ -542,7 +542,7 @@ impl JvmThread {
 				Debug(format!("putstatic"), &self.debug_level, DebugLevel::Info);
 				self.execute_putstatic(bytes, frame);
 				OpcodeResult::Incr(3)
-			}	
+			}
 			Some(OperandCode::GetField) => {
 				Debug(format!("getfield"), &self.debug_level, DebugLevel::Info);
 				self.execute_getfield(((bytes[1] as u16) << 8) | (bytes[2] as u16) as u16, frame);
@@ -688,20 +688,28 @@ impl JvmThread {
 			}
 			Some(OperandCode::ArrayLength) => {
 				Debug(format!("ArrayLength"), &self.debug_level, DebugLevel::Info);
-		Debug(
-			format!("Frame before arraylength: {}", frame),
-			&self.debug_level,
-			DebugLevel::Info,
-		);
-
+				Debug(
+					format!("Frame before arraylength: {}", frame),
+					&self.debug_level,
+					DebugLevel::Info,
+				);
 
 				if let Some(array_ref) = frame.operand_stack.pop() {
-					if let JvmValue::Reference(JvmReferenceType::Array(_, _), JvmReferenceTargetType::Array(array), _) = array_ref
+					if let JvmValue::Reference(
+						JvmReferenceType::Array(_, _),
+						JvmReferenceTargetType::Array(array),
+						_,
+					) = array_ref
 					{
 						// Try to lock the array.
 						if let Ok(array) = array.lock() {
 							let array_length = array.dimension();
-							frame.operand_stack.push(JvmValue::Primitive(JvmPrimitiveType::Integer, 0, array_length as u32, 0));
+							frame.operand_stack.push(JvmValue::Primitive(
+								JvmPrimitiveType::Integer,
+								0,
+								array_length as u32,
+								0,
+							));
 						}
 						Debug(
 							format!("frame after new: {}", frame),
@@ -1078,7 +1086,6 @@ impl JvmThread {
 			))
 			.call();
 		}
-
 	}
 	fn execute_imul(&mut self, frame: &mut Frame) {
 		if let Some(JvmValue::Primitive(JvmPrimitiveType::Integer, _, op1, _)) =
@@ -1608,9 +1615,16 @@ impl JvmThread {
 					self,
 					Arc::clone(&self.methodarea),
 				) {
-					frame.operand_stack.push(JvmValue::Reference(JvmReferenceType::Class(format!("java/lang/String")), JvmReferenceTargetType::Object(Arc::new(Mutex::new(string_object))), 0));
+					frame.operand_stack.push(JvmValue::Reference(
+						JvmReferenceType::Class(format!("java/lang/String")),
+						JvmReferenceTargetType::Object(Arc::new(Mutex::new(string_object))),
+						0,
+					));
 				} else {
-					FatalError::new(FatalErrorType::Todo(format!("Handle this abnormal condition."))).call();
+					FatalError::new(FatalErrorType::Todo(format!(
+						"Handle this abnormal condition."
+					)))
+					.call();
 				}
 			}
 			Constant::Integer(_, value) => {
@@ -2010,12 +2024,11 @@ impl JvmThread {
 								JvmObject::new(instantiated_class, self.debug_level.clone());
 
 							object.instantiate(self, Arc::clone(&self.methodarea));
-						Debug(
-							format!("Made a new {}.", instantiated_class_name),
-							&self.debug_level,
-							DebugLevel::Info,
-						);
-
+							Debug(
+								format!("Made a new {}.", instantiated_class_name),
+								&self.debug_level,
+								DebugLevel::Info,
+							);
 
 							println!("hierarchy: {}", object.hierarchy());
 
@@ -2055,11 +2068,7 @@ impl JvmThread {
 		}
 	}
 
-	fn execute_getstatic(
-		&mut self,
-		bytes: &[u8],
-		source_frame: &mut Frame,
-	) {
+	fn execute_getstatic(&mut self, bytes: &[u8], source_frame: &mut Frame) {
 		let class = source_frame.class().unwrap();
 		let constant_pool = class.get_constant_pool_ref();
 		let field_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
@@ -2101,8 +2110,13 @@ impl JvmThread {
 
 			if let Some(resolved_field_class) = resolved_field_class {
 				self.maybe_initialize_class(&resolved_field_class);
-				let resolved_field_class_constant_pool = resolved_field_class.get_constant_pool_ref();
-				if let Some(_field_ref) = resolved_field_class.get_fields_ref().get_field_ref(&field_name, &field_type, resolved_field_class_constant_pool)  {
+				let resolved_field_class_constant_pool =
+					resolved_field_class.get_constant_pool_ref();
+				if let Some(_field_ref) = resolved_field_class.get_fields_ref().get_field_ref(
+					&field_name,
+					&field_type,
+					resolved_field_class_constant_pool,
+				) {
 					if let Ok(_field_ref_value) = _field_ref.value.lock() {
 						if let Some(field_ref_value) = (*_field_ref_value).clone() {
 							source_frame.operand_stack.push(field_ref_value);
@@ -2121,17 +2135,11 @@ impl JvmThread {
 						.call();
 					}
 				} else {
-					FatalError::new(FatalErrorType::FieldNotFound(
-						field_name,
-						field_class_name
-					))
-					.call();
+					FatalError::new(FatalErrorType::FieldNotFound(field_name, field_class_name))
+						.call();
 				}
 			} else {
-				FatalError::new(FatalErrorType::ClassResolutionFailed(
-					field_class_name	
-				))
-				.call();
+				FatalError::new(FatalErrorType::ClassResolutionFailed(field_class_name)).call();
 			}
 		} else {
 			FatalError::new(FatalErrorType::InvalidConstantReference(
@@ -2143,11 +2151,7 @@ impl JvmThread {
 		}
 	}
 
-	fn execute_putstatic(
-		&mut self,
-		bytes: &[u8],
-		source_frame: &mut Frame,
-	) {
+	fn execute_putstatic(&mut self, bytes: &[u8], source_frame: &mut Frame) {
 		let class = source_frame.class().unwrap();
 		let field_index = (((bytes[1] as u16) << 8) | (bytes[2] as u16)) as usize;
 
@@ -2185,13 +2189,18 @@ impl JvmThread {
 
 			if let Some(resolved_field_class) = resolved_field_class {
 				self.maybe_initialize_class(&resolved_field_class);
-				let resolved_field_class_constant_pool = resolved_field_class.get_constant_pool_ref();
-				if let Some(field_ref) = resolved_field_class.get_fields_ref().get_field_ref(&field_name, &field_type, resolved_field_class_constant_pool)  {
+				let resolved_field_class_constant_pool =
+					resolved_field_class.get_constant_pool_ref();
+				if let Some(field_ref) = resolved_field_class.get_fields_ref().get_field_ref(
+					&field_name,
+					&field_type,
+					resolved_field_class_constant_pool,
+				) {
 					if let Some(top) = source_frame.operand_stack.pop() {
 						if let Ok(mut field_value) = field_ref.value.lock() {
-							*field_value= Some(top);	
+							*field_value = Some(top);
 						}
-				} else {
+					} else {
 						FatalError::new(FatalErrorType::CouldNotLock(
 							field_name,
 							"GetStatic".to_string(),
@@ -2199,17 +2208,11 @@ impl JvmThread {
 						.call();
 					}
 				} else {
-					FatalError::new(FatalErrorType::FieldNotFound(
-						field_name,
-						field_class_name
-					))
-					.call();
+					FatalError::new(FatalErrorType::FieldNotFound(field_name, field_class_name))
+						.call();
 				}
 			} else {
-				FatalError::new(FatalErrorType::ClassResolutionFailed(
-					field_class_name	
-				))
-				.call();
+				FatalError::new(FatalErrorType::ClassResolutionFailed(field_class_name)).call();
 			}
 		} else {
 			FatalError::new(FatalErrorType::InvalidConstantReference(

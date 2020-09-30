@@ -19,7 +19,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Rust-JVM.  If not, see <https://www.gnu.org/licenses/>.
  */
-use jvm::typevalues::create_null_value;
+use super::array::JvmArray;
 use jvm::class::Class;
 use jvm::constant::Constant;
 use jvm::constantpool::ConstantPool;
@@ -28,6 +28,7 @@ use jvm::error::FatalError;
 use jvm::error::FatalErrorType;
 use jvm::jvmthread::JvmThread;
 use jvm::methodarea::MethodArea;
+use jvm::typevalues::create_null_value;
 use jvm::typevalues::JvmPrimitiveType;
 use jvm::typevalues::JvmReferenceTargetType;
 use jvm::typevalues::JvmReferenceType;
@@ -37,7 +38,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use super::array::JvmArray;
 
 pub struct JvmObject {
 	spr: Option<Rc<JvmObject>>,
@@ -64,7 +64,11 @@ pub fn create_static_string_object(
 			FatalError::new(FatalErrorType::ClassNotFound(string_class_name)).call();
 		}
 	} else {
-		FatalError::new(FatalErrorType::CouldNotLock(format!("Method Area"), format!("create_static_string_object"))).call();
+		FatalError::new(FatalErrorType::CouldNotLock(
+			format!("Method Area"),
+			format!("create_static_string_object"),
+		))
+		.call();
 	}
 	None
 }
@@ -121,11 +125,7 @@ impl JvmObject {
 		let fields = self.class.get_fields_ref();
 		let constantpool = self.class.get_constant_pool_ref();
 
-		Debug(
-			format!("instantiate."),
-			&self.debug_level,
-			DebugLevel::Info,
-		);
+		Debug(format!("instantiate."), &self.debug_level, DebugLevel::Info);
 
 		for i in 0..fields.fields_count() {
 			let field = fields.get(i as usize);
@@ -159,16 +159,14 @@ impl JvmObject {
 			 */
 			let value = match r#type {
 				JvmType::Primitive(primitive) => JvmValue::Primitive(primitive, 0, 0, access_flags),
-				JvmType::Reference(reference) =>  {
-					match reference {
-						JvmReferenceType::Array(r#type, access) => {
-							JvmValue::Reference(JvmReferenceType::Array(Rc::clone(&r#type), access), JvmReferenceTargetType::Array(Arc::new(Mutex::new(JvmArray::new(0)))), 0)
-						},
-						_ => {
-							create_null_value()
-						}
-					}
-				}
+				JvmType::Reference(reference) => match reference {
+					JvmReferenceType::Array(r#type, access) => JvmValue::Reference(
+						JvmReferenceType::Array(Rc::clone(&r#type), access),
+						JvmReferenceTargetType::Array(Arc::new(Mutex::new(JvmArray::new(0)))),
+						0,
+					),
+					_ => create_null_value(),
+				},
 			};
 
 			/*
