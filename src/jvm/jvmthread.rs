@@ -2291,14 +2291,22 @@ impl JvmThread {
 					DebugLevel::Info,
 				);
 
+				// Value on the top of the stack must be a reference.
 				if let JvmValue::Reference(
 					JvmReferenceType::Class(objectref_class_name),
 					JvmReferenceTargetType::Object(objectref_object),
 					_,
 				) = objectref
 				{
+					// Lock the object on the top of the stack so that it can be mutated.
 					if let Ok(mut objectref_object) = objectref_object.lock() {
+						// We lock the methodarea because is_type_of may have to load superclasses to check whether
+						// the type of the field matches the type of the object on the top of the stack.
+						// TODO: This could be done more precisely. I.e., do not lock the methodarea until
+						// we have to walk up the object's class hierarchy.
 						if let Ok(mut methodarea) = self.methodarea.lock() {
+							// Check whether the class of the object on the top of the stack (or its superclasses)
+							// matches the class of the field that is being gotten.
 							if objectref_object
 								.get_class()
 								.is_type_of(field_class_name.unwrap(), &mut *methodarea)
@@ -2308,11 +2316,18 @@ impl JvmThread {
 								{
 									frame.operand_stack.push((*field_value).clone())
 								} else {
-									FatalError::new(FatalErrorType::Todo(format!("Document")))
-										.call();
+									FatalError::new(FatalErrorType::FieldNotFound(
+										field_name.unwrap().clone(),
+										field_class_name.unwrap().clone(),
+									))
+									.call();
 								}
 							} else {
-								FatalError::new(FatalErrorType::Todo(format!("Document"))).call();
+								FatalError::new(FatalErrorType::WrongType(
+									format!("execute_getfield"),
+									field_class_name.unwrap().clone(),
+								))
+								.call();
 							}
 						} else {
 							FatalError::new(FatalErrorType::CouldNotLock(
@@ -2340,9 +2355,8 @@ impl JvmThread {
 	}
 
 	fn execute_putfield(&mut self, index: u16, frame: &mut Frame) {
-		/*
-		 * 1.
-		 */
+		// GENERAL: See comments in execute_getfield -- the skeleton of the functions' operations
+		// are the same.
 		let class = frame.class().unwrap();
 		let constant_pool = class.get_constant_pool_ref();
 		let field_index = index as usize;
@@ -2355,9 +2369,6 @@ impl JvmThread {
 				if let Constant::Fieldref(_, class_ref, name_and_type_ref) =
 					constant_pool.get_constant_ref(field_index)
 				{
-					// Let's get the name and the type of the field!
-
-					// Let's get the class name
 					let mut field_class_name = None;
 					let mut field_name = None;
 					let mut field_type = None;
@@ -2368,7 +2379,6 @@ impl JvmThread {
 						if let Constant::Utf8(_, _, _, class_name) =
 							constant_pool.get_constant_ref(*class_name_index as usize)
 						{
-							// class_name is the name of the class where the field exists.
 							field_class_name = Some(class_name);
 						}
 					}
@@ -2422,11 +2432,33 @@ impl JvmThread {
 									.is_type_of(field_class_name.unwrap(), &mut *methodarea)
 								{
 									objectref_object.set_field(field_name.unwrap(), Rc::new(value))
+								} else {
+									FatalError::new(FatalErrorType::WrongType(
+										format!("execute_putfield"),
+										field_class_name.unwrap().clone(),
+									))
+									.call();
 								}
+							} else {
+								FatalError::new(FatalErrorType::CouldNotLock(
+									"Method Area.".to_string(),
+									"put_field".to_string(),
+								))
+								.call();
 							}
+						} else {
+							FatalError::new(FatalErrorType::CouldNotLock(
+								objectref_class_name,
+								"put_field".to_string(),
+							))
+							.call();
 						}
 					} else {
-						// Object ref ahs to be a classref.
+						FatalError::new(FatalErrorType::WrongType(
+							format!("execute_putfield"),
+							format!("Reference"),
+						))
+						.call();
 					}
 				}
 			}

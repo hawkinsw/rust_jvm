@@ -97,6 +97,14 @@ impl Class {
 		self.resolve_superclass()
 	}
 
+	/**
+	 * is_type_of
+	 *
+	 * Recursively, check whether `type` matches this class', or one of its
+	 * superclasses. Because the parameter is a mutable reference to the MethodArea,
+	 * it must be locked before calling. Assume that is the case. TODO: This locking
+	 * should be more precise.
+	 */
 	pub fn is_type_of(&self, r#type: &String, methodarea: &mut MethodArea) -> bool {
 		if self.get_class_name().unwrap() == *r#type {
 			true
